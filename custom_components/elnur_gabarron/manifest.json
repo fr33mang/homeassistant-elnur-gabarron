@@ -1,15 +1,14 @@
 {
   "domain": "elnur_gabarron",
   "name": "Elnur Gabarron Heaters",
-  "version": "2026.02.12",
-  "documentation": "https://github.com/fr33mang/homeassistant-elnur-gabarron",
-  "issue_tracker": "https://github.com/fr33mang/homeassistant-elnur-gabarron/issues",
-  "requirements": [],
+  "after_dependencies": [],
   "codeowners": ["@fr33mang"],
   "config_flow": true,
-  "iot_class": "cloud_push",
-  "integration_type": "hub",
   "dependencies": [],
-  "after_dependencies": []
+  "documentation": "https://github.com/fr33mang/homeassistant-elnur-gabarron",
+  "integration_type": "hub",
+  "iot_class": "cloud_push",
+  "issue_tracker": "https://github.com/fr33mang/homeassistant-elnur-gabarron/issues",
+  "requirements": [],
+  "version": "2026.02.12"
 }
-
