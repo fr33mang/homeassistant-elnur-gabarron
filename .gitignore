@@ -1,0 +1,98 @@
+# Test files and development scripts
+test*.py
+run_test.sh
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+.venv/
+env/
+.env/
+ENV/
+env.bak/
+venv.bak/
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+*.cover
+.hypothesis/
+
+# Type checkers
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
+
+# Large files / captures
+*.har
+*.log
+
+# Secrets and credentials
+secrets.yaml
+secrets.json
+*.key
+*.pem
+
+# Home Assistant specific
+*.db
+*.db-shm
+*.db-wal
+home-assistant.log
+home-assistant_v2.db
+OZW_Log.txt
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.backup
+
+# Development directories
+api_requests/
+examples/

@@ -1,0 +1,5 @@
+{
+  "name": "Elnur Gabarron Heaters",
+  "render_readme": true,
+  "domains": ["climate", "sensor", "number"]
+}

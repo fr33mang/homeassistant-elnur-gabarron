@@ -1,0 +1,14 @@
+{
+  "domain": "elnur_gabarron",
+  "name": "Elnur Gabarron Heaters",
+  "version": "1.0.0",
+  "documentation": "https://github.com/fr33mang/homeassistant-elnur-gabarron",
+  "issue_tracker": "https://github.com/fr33mang/homeassistant-elnur-gabarron/issues",
+  "requirements": [],
+  "codeowners": ["@fr33mang"],
+  "config_flow": true,
+  "iot_class": "cloud_push",
+  "dependencies": [],
+  "after_dependencies": []
+}
+

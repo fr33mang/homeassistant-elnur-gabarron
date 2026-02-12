@@ -1,0 +1,23 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Configure Elnur Gabarron",
+        "description": "Enter your Elnur Gabarron account credentials",
+        "data": {
+          "username": "Email",
+          "password": "Password",
+          "serial_id": "Serial ID (usually 7)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to the API. Please check your credentials.",
+      "unknown": "Unexpected error occurred"
+    },
+    "abort": {
+      "already_configured": "This account is already configured"
+    }
+  }
+}
+
