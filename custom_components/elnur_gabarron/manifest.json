@@ -10,5 +10,5 @@
   "iot_class": "cloud_push",
   "issue_tracker": "https://github.com/fr33mang/homeassistant-elnur-gabarron/issues",
   "requirements": [],
-  "version": "2026.02.12"
+  "version": "2026.2.12.1"
 }
