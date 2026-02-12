@@ -146,10 +146,9 @@ custom_components/elnur_gabarron/
 
 ## Version
 
-**Status**: Testing with my local devices only✅  
-**Version**: 0.0.1  
-**Features**: Complete with real-time updates  
-**API Version**: v2  
+**Status**: Working ✅  
+**Version**: 2026.02.12 (CalVer: YYYY.MM.DD)  
+**Features**: Complete with real-time updates
 
 ## License
 

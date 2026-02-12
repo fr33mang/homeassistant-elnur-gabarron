@@ -1,7 +1,7 @@
 {
   "domain": "elnur_gabarron",
   "name": "Elnur Gabarron Heaters",
-  "version": "1.0.0",
+  "version": "2026.02.12",
   "documentation": "https://github.com/fr33mang/homeassistant-elnur-gabarron",
   "issue_tracker": "https://github.com/fr33mang/homeassistant-elnur-gabarron/issues",
   "requirements": [],
