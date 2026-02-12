@@ -1,6 +1,6 @@
 # Elnur Gabarron Integration
 
-Custom integration for controlling Elnur Gabarron electric heaters using real-time Socket.IO updates and the official Elnur API.
+Elnur Gabarron Heaters integration based on reverse engineered API. Control your electric heaters using real-time Socket.IO updates.
 
 ## Features
 
