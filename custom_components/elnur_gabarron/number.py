@@ -1,4 +1,3 @@
-"""Number platform for Elnur Gabarron."""
 import logging
 from typing import Any
 
@@ -6,12 +5,12 @@ from homeassistant.components.number import NumberEntity, NumberMode
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import UnitOfTemperature
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
-from homeassistant.helpers.entity import EntityCategory
 
-from .socketio_coordinator import ElnurSocketIOCoordinator
 from .const import DOMAIN, MANUFACTURER, MODEL
+from .socketio_coordinator import ElnurSocketIOCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -32,11 +31,13 @@ async def async_setup_entry(
         zone_name = zone_data.get("name", f"Zone {zone_id}")
 
         # Add temperature setting numbers in desired order
-        entities.extend([
-            ElnurGabarronAntiFrostTempNumber(coordinator, zone_key, device_id, zone_id, zone_name),
-            ElnurGabarronEcoTempNumber(coordinator, zone_key, device_id, zone_id, zone_name),
-            ElnurGabarronComfortTempNumber(coordinator, zone_key, device_id, zone_id, zone_name),
-        ])
+        entities.extend(
+            [
+                ElnurGabarronAntiFrostTempNumber(coordinator, zone_key, device_id, zone_id, zone_name),
+                ElnurGabarronEcoTempNumber(coordinator, zone_key, device_id, zone_id, zone_name),
+                ElnurGabarronComfortTempNumber(coordinator, zone_key, device_id, zone_id, zone_name),
+            ]
+        )
 
     async_add_entities(entities)
     _LOGGER.info("Added %s Elnur Gabarron number entities", len(entities))
@@ -64,16 +65,16 @@ class ElnurGabarronNumberBase(CoordinatorEntity, NumberEntity):
     def zone_data(self) -> dict[str, Any]:
         """Get zone data from coordinator."""
         return self.coordinator.data.get(self._zone_key, {})
-    
+
     @property
     def zone_name(self) -> str:
         """Get the current zone name (dynamic from dev_data)."""
         zone_data = self.zone_data
         current_name = zone_data.get("name")
-        
+
         if current_name:
             return current_name
-        
+
         return self._initial_zone_name
 
     @property
@@ -84,17 +85,17 @@ class ElnurGabarronNumberBase(CoordinatorEntity, NumberEntity):
         factory_opts = setup.get("factory_options", {})
         accumulator_power = factory_opts.get("accumulator_power", "")
         emitter_power = factory_opts.get("emitter_power", "")
-        
+
         model_parts = [MODEL]
         if accumulator_power:
             model_parts.append(f"{accumulator_power}W")
         if emitter_power:
             model_parts.append(f"{emitter_power}W")
-        
+
         # Get location context from zone data
         device_name = zone_data.get("device_name", "")
         group_name = zone_data.get("group_name", "")
-        
+
         return {
             "identifiers": {(DOMAIN, self._zone_key)},
             "name": self.zone_name,
@@ -130,7 +131,7 @@ class ElnurGabarronEcoTempNumber(ElnurGabarronNumberBase):
         self._attr_native_max_value = 30.0
         self._attr_native_step = 0.5
         self._attr_entity_category = EntityCategory.CONFIG
-    
+
     @property
     def name(self) -> str:
         """Return the name of the number entity."""
@@ -151,19 +152,12 @@ class ElnurGabarronEcoTempNumber(ElnurGabarronNumberBase):
     async def async_set_native_value(self, value: float) -> None:
         """Set new economy temperature."""
         _LOGGER.info("Setting economy temperature for %s zone %s to %s°C", self._device_id, self._zone_id, value)
-        
+
         try:
             # Send control command to API
-            control_data = {
-                "eco_temp": str(value),
-                "units": "C"
-            }
-            success = await self.coordinator.api.set_control(
-                self._device_id, 
-                control_data, 
-                self._zone_id
-            )
-            
+            control_data = {"eco_temp": str(value), "units": "C"}
+            success = await self.coordinator.api.set_control(self._device_id, control_data, self._zone_id)
+
             if success:
                 # Optimistically update the state
                 if self._zone_key in self.coordinator.data:
@@ -198,7 +192,7 @@ class ElnurGabarronComfortTempNumber(ElnurGabarronNumberBase):
         self._attr_native_max_value = 30.0
         self._attr_native_step = 0.5
         self._attr_entity_category = EntityCategory.CONFIG
-    
+
     @property
     def name(self) -> str:
         """Return the name of the number entity."""
@@ -219,19 +213,12 @@ class ElnurGabarronComfortTempNumber(ElnurGabarronNumberBase):
     async def async_set_native_value(self, value: float) -> None:
         """Set new comfort temperature."""
         _LOGGER.info("Setting comfort temperature for %s zone %s to %s°C", self._device_id, self._zone_id, value)
-        
+
         try:
             # Send control command to API
-            control_data = {
-                "comf_temp": str(value),
-                "units": "C"
-            }
-            success = await self.coordinator.api.set_control(
-                self._device_id, 
-                control_data, 
-                self._zone_id
-            )
-            
+            control_data = {"comf_temp": str(value), "units": "C"}
+            success = await self.coordinator.api.set_control(self._device_id, control_data, self._zone_id)
+
             if success:
                 # Optimistically update the state
                 if self._zone_key in self.coordinator.data:
@@ -266,7 +253,7 @@ class ElnurGabarronAntiFrostTempNumber(ElnurGabarronNumberBase):
         self._attr_native_max_value = 15.0
         self._attr_native_step = 0.5
         self._attr_entity_category = EntityCategory.CONFIG
-    
+
     @property
     def name(self) -> str:
         """Return the name of the number entity."""
@@ -287,19 +274,12 @@ class ElnurGabarronAntiFrostTempNumber(ElnurGabarronNumberBase):
     async def async_set_native_value(self, value: float) -> None:
         """Set new anti-frost temperature."""
         _LOGGER.info("Setting anti-frost temperature for %s zone %s to %s°C", self._device_id, self._zone_id, value)
-        
+
         try:
             # Send control command to API
-            control_data = {
-                "ice_temp": str(value),
-                "units": "C"
-            }
-            success = await self.coordinator.api.set_control(
-                self._device_id, 
-                control_data, 
-                self._zone_id
-            )
-            
+            control_data = {"ice_temp": str(value), "units": "C"}
+            success = await self.coordinator.api.set_control(self._device_id, control_data, self._zone_id)
+
             if success:
                 # Optimistically update the state
                 if self._zone_key in self.coordinator.data:

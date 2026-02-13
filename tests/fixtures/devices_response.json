@@ -1,0 +1,16 @@
+[
+  {
+    "id": "mock_group_id_123456789abc",
+    "name": "Test Home",
+    "devs": [
+      {
+        "dev_id": "mock_device_id_abcdef123",
+        "name": "Test Heater",
+        "product_id": "0B26",
+        "fw_version": "1.31.0",
+        "serial_id": "7"
+      }
+    ],
+    "owner": true
+  }
+]
