@@ -1,0 +1,22 @@
+{
+  "dev_id": "mock_device_id_abcdef123",
+  "zones": [
+    {
+      "zone_id": "3",
+      "name": "Test Zone",
+      "current_temp": 21.5,
+      "setpoint": 22.0,
+      "mode": "on",
+      "operating_mode": "Manual",
+      "power_min": 500,
+      "power_max": 1500,
+      "power_nominal": 1000,
+      "error_code": 0,
+      "fw_version": "1.31.0",
+      "pcb_temp": 45.2,
+      "preset_eco": 18.0,
+      "preset_comfort": 22.0,
+      "preset_antifrost": 7.0
+    }
+  ]
+}

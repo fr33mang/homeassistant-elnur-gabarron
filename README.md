@@ -2,6 +2,8 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/custom-components/hacs)
+[![Tests](https://github.com/fr33mang/homeassistant-elnur-gabarron/workflows/Tests/badge.svg)](https://github.com/fr33mang/homeassistant-elnur-gabarron/actions/workflows/test.yaml)
+[![codecov](https://codecov.io/gh/fr33mang/homeassistant-elnur-gabarron/graph/badge.svg?token=2BMLJJGA4G)](https://codecov.io/gh/fr33mang/homeassistant-elnur-gabarron)
 [![Hassfest](https://github.com/fr33mang/homeassistant-elnur-gabarron/workflows/Validate%20with%20hassfest/badge.svg)](https://github.com/fr33mang/homeassistant-elnur-gabarron/actions/workflows/hassfest.yaml)
 [![HACS Validation](https://github.com/fr33mang/homeassistant-elnur-gabarron/workflows/HACS%20Validation/badge.svg)](https://github.com/fr33mang/homeassistant-elnur-gabarron/actions/workflows/hacs.yaml)
 
@@ -9,14 +11,14 @@ Elnur Gabarron Heaters integration based on reverse engineered API. Control your
 
 ## Features
 
-✅ **Real-time updates** - Instant synchronization via Socket.IO  
-✅ **Automatic device discovery** - Each radiator zone appears as a separate device  
-✅ **Temperature control** - Set target temperature and view current temperature  
-✅ **Multiple temperature presets** - Configure Eco, Comfort, and Anti-frost temperatures  
-✅ **Power management** - Turn heaters on/off  
-✅ **Comprehensive sensors** - Temperature, power, charge level, error codes, firmware  
-✅ **Auto-reconnection** - Seamless recovery from connection issues  
-✅ **Dynamic naming** - Device names sync from Elnur app
+- ✅ **Real-time updates** - Instant synchronization via Socket.IO
+- ✅ **Automatic device discovery** - Each radiator zone appears as a separate device
+- ✅ **Temperature control** - Set target temperature and view current temperature
+- ✅ **Multiple temperature presets** - Configure Eco, Comfort, and Anti-frost temperatures
+- ✅ **Power management** - Turn heaters on/off
+- ✅ **Comprehensive sensors** - Temperature, power, charge level, error codes, firmware
+- ✅ **Auto-reconnection** - Seamless recovery from connection issues
+- ✅ **Dynamic naming** - Device names sync from Elnur app
 
 ## Installation
 
@@ -146,8 +148,8 @@ custom_components/elnur_gabarron/
 
 ## Version
 
-**Status**: Working ✅  
-**Version**: 2026.02.12 (CalVer: YYYY.MM.DD)  
+**Status**: Working ✅
+**Version**: 2026.2.13 (CalVer: YYYY.MM.DD)
 **Features**: Complete with real-time updates
 
 ## License

@@ -1,5 +1,5 @@
 # Test files and development scripts
-test*.py
+examples/
 run_test.sh
 
 # Byte-compiled / optimized / DLL files
@@ -58,6 +58,7 @@ Desktop.ini
 # Testing
 .pytest_cache/
 .coverage
+coverage.xml
 htmlcov/
 *.cover
 .hypothesis/

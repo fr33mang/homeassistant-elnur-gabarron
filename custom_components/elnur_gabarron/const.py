@@ -27,4 +27,3 @@ DEFAULT_SERIAL_ID = "7"
 # Device info
 MANUFACTURER = "Elnur Gabarron"
 MODEL = "Electric Heater"
-
