@@ -211,7 +211,11 @@ class ElnurGabarronAPI:
             raise ElnurGabarronAPIError(f"Failed to get device status: {err}")
 
     async def set_temperature(
-        self, device_id: str, temperature: float, zone_id: int = 3, mode: str | None = None
+        self,
+        device_id: str,
+        temperature: float,
+        zone_id: int = 3,
+        mode: str | None = None,
     ) -> bool:
         """Set target temperature for a device zone.
 
