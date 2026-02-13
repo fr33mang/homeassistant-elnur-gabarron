@@ -3,7 +3,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/custom-components/hacs)
 [![Tests](https://github.com/fr33mang/homeassistant-elnur-gabarron/workflows/Tests/badge.svg)](https://github.com/fr33mang/homeassistant-elnur-gabarron/actions/workflows/test.yaml)
-[![codecov](https://codecov.io/gh/fr33mang/homeassistant-elnur-gabarron/graph/badge.svg)](https://codecov.io/gh/fr33mang/homeassistant-elnur-gabarron)
+[![codecov](https://codecov.io/gh/fr33mang/homeassistant-elnur-gabarron/graph/badge.svg?token=2BMLJJGA4G)](https://codecov.io/gh/fr33mang/homeassistant-elnur-gabarron)
 [![Hassfest](https://github.com/fr33mang/homeassistant-elnur-gabarron/workflows/Validate%20with%20hassfest/badge.svg)](https://github.com/fr33mang/homeassistant-elnur-gabarron/actions/workflows/hassfest.yaml)
 [![HACS Validation](https://github.com/fr33mang/homeassistant-elnur-gabarron/workflows/HACS%20Validation/badge.svg)](https://github.com/fr33mang/homeassistant-elnur-gabarron/actions/workflows/hacs.yaml)
 
