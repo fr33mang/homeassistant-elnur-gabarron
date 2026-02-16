@@ -1,4 +1,5 @@
 """The Elnur Gabarron integration."""
+
 import logging
 
 from homeassistant.config_entries import ConfigEntry
@@ -8,14 +9,8 @@ from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import ElnurGabarronAPI, ElnurGabarronAPIError
+from .const import CONF_PASSWORD, CONF_SERIAL_ID, CONF_USERNAME, DEFAULT_SERIAL_ID, DOMAIN
 from .socketio_coordinator import ElnurSocketIOCoordinator
-from .const import (
-    DOMAIN,
-    CONF_USERNAME,
-    CONF_PASSWORD,
-    CONF_SERIAL_ID,
-    DEFAULT_SERIAL_ID,
-)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -68,10 +63,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Update config entry title to show the actual home/group name
     if coordinator.group_name and entry.title != coordinator.group_name:
-        hass.config_entries.async_update_entry(
-            entry,
-            title=coordinator.group_name
-        )
+        hass.config_entries.async_update_entry(entry, title=coordinator.group_name)
         _LOGGER.debug("Updated integration title to: %s", coordinator.group_name)
 
     # Store coordinator
@@ -95,11 +87,10 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Stop Socket.IO listener
     coordinator: ElnurSocketIOCoordinator = hass.data[DOMAIN][entry.entry_id]
     await coordinator.async_stop()
-    
+
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
     if unload_ok:
         hass.data[DOMAIN].pop(entry.entry_id)
 
     return unload_ok
-
