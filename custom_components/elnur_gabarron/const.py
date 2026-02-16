@@ -11,7 +11,6 @@ CONF_SERIAL_ID = "serial_id"
 API_BASE_URL = "https://api-elnur.helki.com"
 API_TOKEN_ENDPOINT = "/client/token"
 API_DEVICES_ENDPOINT = "/api/v2/grouped_devs"
-API_DEVICE_STATUS_ENDPOINT = "/api/v2/devs/{device_id}/acm/{zone_id}/status"
 API_DEVICE_CONTROL_ENDPOINT = "/api/v2/devs/{device_id}/acm/{zone_id}/status"
 
 # Socket.IO Constants

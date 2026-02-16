@@ -7,10 +7,9 @@ from datetime import datetime, timedelta
 
 from .const import (
     API_BASE_URL,
-    API_TOKEN_ENDPOINT,
-    API_DEVICES_ENDPOINT,
-    API_DEVICE_STATUS_ENDPOINT,
     API_DEVICE_CONTROL_ENDPOINT,
+    API_DEVICES_ENDPOINT,
+    API_TOKEN_ENDPOINT,
     CLIENT_ID,
     CLIENT_SECRET,
 )
@@ -161,9 +160,8 @@ class ElnurGabarronAPI:
         
         try:
             url = f"{API_BASE_URL}{API_DEVICES_ENDPOINT}"
-            headers = self._get_headers()
 
-            async with self._session.get(url, headers=headers) as response:
+            async with self._session.get(url, headers=self._get_headers()) as response:
                 if response.status == 200:
                     groups = await response.json()
                     _LOGGER.debug("Fetched %s group(s) from API", len(groups) if isinstance(groups, list) else 0)
@@ -200,10 +198,9 @@ class ElnurGabarronAPI:
         await self._ensure_authenticated()
         
         try:
-            url = f"{API_BASE_URL}{API_DEVICE_STATUS_ENDPOINT.format(device_id=device_id, zone_id=zone_id)}"
-            headers = self._get_headers()
+            url = f"{API_BASE_URL}{API_DEVICE_CONTROL_ENDPOINT.format(device_id=device_id, zone_id=zone_id)}"
 
-            async with self._session.get(url, headers=headers) as response:
+            async with self._session.get(url, headers=self._get_headers()) as response:
                 if response.status == 200:
                     return await response.json()
                 else:
@@ -227,8 +224,6 @@ class ElnurGabarronAPI:
         
         try:
             url = f"{API_BASE_URL}{API_DEVICE_CONTROL_ENDPOINT.format(device_id=device_id, zone_id=zone_id)}"
-            headers = self._get_headers()
-            
             # Control command format - temperature and optional mode
             data = {
                 "stemp": str(temperature),
@@ -239,7 +234,7 @@ class ElnurGabarronAPI:
             if mode:
                 data["mode"] = mode
 
-            async with self._session.post(url, json=data, headers=headers) as response:
+            async with self._session.post(url, json=data, headers=self._get_headers()) as response:
                 if response.status in [200, 201, 204]:
                     mode_msg = f" with mode '{mode}'" if mode else ""
                     _LOGGER.info("Set temperature to %s°C%s for device %s zone %s", temperature, mode_msg, device_id, zone_id)
@@ -264,15 +259,13 @@ class ElnurGabarronAPI:
         
         try:
             url = f"{API_BASE_URL}{API_DEVICE_CONTROL_ENDPOINT.format(device_id=device_id, zone_id=zone_id)}"
-            headers = self._get_headers()
-            
             # Control command format from HAR file
             # Modes: "off", "auto" (follows schedule), "modified_auto" (manual control)
             data = {
                 "mode": mode,
             }
 
-            async with self._session.post(url, json=data, headers=headers) as response:
+            async with self._session.post(url, json=data, headers=self._get_headers()) as response:
                 if response.status in [200, 201, 204]:
                     _LOGGER.info("Set mode to '%s' for device %s zone %s", mode, device_id, zone_id)
                     return True
@@ -290,9 +283,8 @@ class ElnurGabarronAPI:
         
         try:
             url = f"{API_BASE_URL}{API_DEVICE_CONTROL_ENDPOINT.format(device_id=device_id, zone_id=zone_id)}"
-            headers = self._get_headers()
 
-            async with self._session.post(url, json=control_data, headers=headers) as response:
+            async with self._session.post(url, json=control_data, headers=self._get_headers()) as response:
                 if response.status in [200, 201, 204]:
                     _LOGGER.info("Sent control command to device %s zone %s: %s", device_id, zone_id, control_data)
                     return True
@@ -305,7 +297,8 @@ class ElnurGabarronAPI:
             raise ElnurGabarronAPIError(f"Failed to send control command: {err}")
 
     def _get_headers(self) -> dict[str, str]:
-        """Get headers for API requests."""
+        """Return headers for API requests."""
+
         headers = {
             "accept": "application/json, text/plain, */*",
             "content-type": "application/json",
