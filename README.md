@@ -9,14 +9,14 @@ Elnur Gabarron Heaters integration based on reverse engineered API. Control your
 
 ## Features
 
-✅ **Real-time updates** - Instant synchronization via Socket.IO
-✅ **Automatic device discovery** - Each radiator zone appears as a separate device
-✅ **Temperature control** - Set target temperature and view current temperature
-✅ **Multiple temperature presets** - Configure Eco, Comfort, and Anti-frost temperatures
-✅ **Power management** - Turn heaters on/off
-✅ **Comprehensive sensors** - Temperature, power, charge level, error codes, firmware
-✅ **Auto-reconnection** - Seamless recovery from connection issues
-✅ **Dynamic naming** - Device names sync from Elnur app
+- ✅ **Real-time updates** - Instant synchronization via Socket.IO
+- ✅ **Automatic device discovery** - Each radiator zone appears as a separate device
+- ✅ **Temperature control** - Set target temperature and view current temperature
+- ✅ **Multiple temperature presets** - Configure Eco, Comfort, and Anti-frost temperatures
+- ✅ **Power management** - Turn heaters on/off
+- ✅ **Comprehensive sensors** - Temperature, power, charge level, error codes, firmware
+- ✅ **Auto-reconnection** - Seamless recovery from connection issues
+- ✅ **Dynamic naming** - Device names sync from Elnur app
 
 ## Installation
 
