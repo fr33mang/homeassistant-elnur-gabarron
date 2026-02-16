@@ -1,21 +1,18 @@
 """Sensor platform for Elnur Gabarron."""
+
 import logging
 from typing import Any
 
-from homeassistant.components.sensor import (
-    SensorEntity,
-    SensorDeviceClass,
-    SensorStateClass,
-)
+from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorStateClass
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import PERCENTAGE, UnitOfPower, UnitOfTemperature
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
-from homeassistant.helpers.entity import EntityCategory
 
-from .socketio_coordinator import ElnurSocketIOCoordinator
 from .const import DOMAIN, MANUFACTURER, MODEL
+from .socketio_coordinator import ElnurSocketIOCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -32,47 +29,45 @@ async def async_setup_entry(
     entities = []
     for zone_key, zone_data in coordinator.data.items():
         zone_id = zone_data.get("zone_id")
-        
+
         # Extract actual device ID (without _zoneX suffix)
         if "_zone" in zone_key:
             actual_device_id = zone_key.split("_zone")[0]
         else:
             actual_device_id = zone_key
-        
+
         # Get zone name from data or use generic fallback
         zone_name = zone_data.get("name", f"Heater Zone {zone_id}")
-        
+
         # Add sensors for this zone
-        entities.extend([
-            # Primary sensors (enabled by default)
-            ElnurGabarronChargeLevelSensor(coordinator, zone_key, actual_device_id, zone_id, zone_name),
-            ElnurGabarronPowerSensor(coordinator, zone_key, actual_device_id, zone_id, zone_name),
-            ElnurGabarronHeatingSensor(coordinator, zone_key, actual_device_id, zone_id, zone_name),
-            ElnurGabarronChargingSensor(coordinator, zone_key, actual_device_id, zone_id, zone_name),
-            ElnurGabarronPCBTempSensor(coordinator, zone_key, actual_device_id, zone_id, zone_name),
-            
-            # Additional status sensors
-            ElnurGabarronTargetChargeSensor(coordinator, zone_key, actual_device_id, zone_id, zone_name),
-            ElnurGabarronWindowOpenSensor(coordinator, zone_key, actual_device_id, zone_id, zone_name),
-            ElnurGabarronPresenceSensor(coordinator, zone_key, actual_device_id, zone_id, zone_name),
-            ElnurGabarronTrueRadiantSensor(coordinator, zone_key, actual_device_id, zone_id, zone_name),
-            ElnurGabarronExtraEnergySensor(coordinator, zone_key, actual_device_id, zone_id, zone_name),
-            
-            # Temperature settings
-            ElnurGabarronEcoTempSensor(coordinator, zone_key, actual_device_id, zone_id, zone_name),
-            ElnurGabarronComfortTempSensor(coordinator, zone_key, actual_device_id, zone_id, zone_name),
-            ElnurGabarronAntiFrostTempSensor(coordinator, zone_key, actual_device_id, zone_id, zone_name),
-            
-            # Configuration sensors (disabled by default)
-            ElnurGabarronPrioritySensor(coordinator, zone_key, actual_device_id, zone_id, zone_name),
-            ElnurGabarronErrorCodeSensor(coordinator, zone_key, actual_device_id, zone_id, zone_name),
-            ElnurGabarronFirmwareVersionSensor(coordinator, zone_key, actual_device_id, zone_id, zone_name),
-            
-            # Charging schedule sensors
-            ElnurGabarronChargingSlot1Sensor(coordinator, zone_key, actual_device_id, zone_id, zone_name),
-            ElnurGabarronChargingSlot2Sensor(coordinator, zone_key, actual_device_id, zone_id, zone_name),
-            ElnurGabarronChargingDaysSensor(coordinator, zone_key, actual_device_id, zone_id, zone_name),
-        ])
+        entities.extend(
+            [
+                # Primary sensors (enabled by default)
+                ElnurGabarronChargeLevelSensor(coordinator, zone_key, actual_device_id, zone_id, zone_name),
+                ElnurGabarronPowerSensor(coordinator, zone_key, actual_device_id, zone_id, zone_name),
+                ElnurGabarronHeatingSensor(coordinator, zone_key, actual_device_id, zone_id, zone_name),
+                ElnurGabarronChargingSensor(coordinator, zone_key, actual_device_id, zone_id, zone_name),
+                ElnurGabarronPCBTempSensor(coordinator, zone_key, actual_device_id, zone_id, zone_name),
+                # Additional status sensors
+                ElnurGabarronTargetChargeSensor(coordinator, zone_key, actual_device_id, zone_id, zone_name),
+                ElnurGabarronWindowOpenSensor(coordinator, zone_key, actual_device_id, zone_id, zone_name),
+                ElnurGabarronPresenceSensor(coordinator, zone_key, actual_device_id, zone_id, zone_name),
+                ElnurGabarronTrueRadiantSensor(coordinator, zone_key, actual_device_id, zone_id, zone_name),
+                ElnurGabarronExtraEnergySensor(coordinator, zone_key, actual_device_id, zone_id, zone_name),
+                # Temperature settings
+                ElnurGabarronEcoTempSensor(coordinator, zone_key, actual_device_id, zone_id, zone_name),
+                ElnurGabarronComfortTempSensor(coordinator, zone_key, actual_device_id, zone_id, zone_name),
+                ElnurGabarronAntiFrostTempSensor(coordinator, zone_key, actual_device_id, zone_id, zone_name),
+                # Configuration sensors (disabled by default)
+                ElnurGabarronPrioritySensor(coordinator, zone_key, actual_device_id, zone_id, zone_name),
+                ElnurGabarronErrorCodeSensor(coordinator, zone_key, actual_device_id, zone_id, zone_name),
+                ElnurGabarronFirmwareVersionSensor(coordinator, zone_key, actual_device_id, zone_id, zone_name),
+                # Charging schedule sensors
+                ElnurGabarronChargingSlot1Sensor(coordinator, zone_key, actual_device_id, zone_id, zone_name),
+                ElnurGabarronChargingSlot2Sensor(coordinator, zone_key, actual_device_id, zone_id, zone_name),
+                ElnurGabarronChargingDaysSensor(coordinator, zone_key, actual_device_id, zone_id, zone_name),
+            ]
+        )
         _LOGGER.debug("Created sensors for %s", zone_name)
 
     async_add_entities(entities)
@@ -101,23 +96,23 @@ class ElnurGabarronSensorBase(CoordinatorEntity, SensorEntity):
     def zone_data(self) -> dict[str, Any]:
         """Get zone data from coordinator."""
         return self.coordinator.data.get(self._zone_key, {})
-    
+
     @property
     def zone_name(self) -> str:
         """Get the current zone name (dynamic from dev_data)."""
         zone_data = self.zone_data
         current_name = zone_data.get("name")
-        
+
         if current_name:
             return current_name
-        
+
         # Fallback to initial name
         return self._initial_zone_name
 
     @property
     def device_info(self) -> dict[str, Any]:
         """Return device information.
-        
+
         Each zone is a separate device - must match climate entity device_info.
         """
         zone_data = self.zone_data
@@ -125,18 +120,18 @@ class ElnurGabarronSensorBase(CoordinatorEntity, SensorEntity):
         factory_opts = setup.get("factory_options", {})
         accumulator_power = factory_opts.get("accumulator_power", "")
         emitter_power = factory_opts.get("emitter_power", "")
-        
+
         model_parts = [MODEL]
         if accumulator_power:
             model_parts.append(f"{accumulator_power}W")
         if emitter_power:
             model_parts.append(f"(emitter: {emitter_power}W)")
         model_name = " ".join(model_parts)
-        
+
         # Get location context from zone data
         device_name = zone_data.get("device_name", "")
         group_name = zone_data.get("group_name", "")
-        
+
         return {
             "identifiers": {(DOMAIN, f"{self._device_id}_zone{self._zone_id}")},
             "name": self.zone_name,  # Use dynamic zone_name property
@@ -162,7 +157,7 @@ class ElnurGabarronChargeLevelSensor(ElnurGabarronSensorBase):
         self._attr_device_class = SensorDeviceClass.BATTERY
         self._attr_state_class = SensorStateClass.MEASUREMENT
         self._attr_icon = "mdi:battery-charging"
-    
+
     @property
     def name(self) -> str:
         """Return the name of the sensor."""
@@ -192,7 +187,7 @@ class ElnurGabarronPowerSensor(ElnurGabarronSensorBase):
         self._attr_device_class = SensorDeviceClass.POWER
         self._attr_state_class = SensorStateClass.MEASUREMENT
         self._attr_icon = "mdi:lightning-bolt"
-    
+
     @property
     def name(self) -> str:
         """Return the name of the sensor."""
@@ -219,7 +214,7 @@ class ElnurGabarronHeatingSensor(ElnurGabarronSensorBase):
         super().__init__(coordinator, full_device_id, device_id, zone_id, zone_name)
         self._attr_unique_id = f"{DOMAIN}_{device_id}_{zone_id}_heating"
         self._attr_icon = "mdi:fire"
-    
+
     @property
     def name(self) -> str:
         """Return the name of the sensor."""
@@ -243,7 +238,7 @@ class ElnurGabarronChargingSensor(ElnurGabarronSensorBase):
         super().__init__(coordinator, full_device_id, device_id, zone_id, zone_name)
         self._attr_unique_id = f"{DOMAIN}_{device_id}_{zone_id}_charging"
         self._attr_icon = "mdi:battery-charging-100"
-    
+
     @property
     def name(self) -> str:
         """Return the name of the sensor."""
@@ -271,7 +266,7 @@ class ElnurGabarronPCBTempSensor(ElnurGabarronSensorBase):
         self._attr_state_class = SensorStateClass.MEASUREMENT
         self._attr_icon = "mdi:thermometer"
         self._attr_entity_registry_enabled_default = False  # Disabled by default
-    
+
     @property
     def name(self) -> str:
         """Return the name of the sensor."""
@@ -300,7 +295,7 @@ class ElnurGabarronTargetChargeSensor(ElnurGabarronSensorBase):
         self._attr_native_unit_of_measurement = PERCENTAGE
         self._attr_icon = "mdi:battery-arrow-up"
         self._attr_state_class = SensorStateClass.MEASUREMENT
-    
+
     @property
     def name(self) -> str:
         """Return the name of the sensor."""
@@ -327,7 +322,7 @@ class ElnurGabarronWindowOpenSensor(ElnurGabarronSensorBase):
         super().__init__(coordinator, full_device_id, device_id, zone_id, zone_name)
         self._attr_unique_id = f"{DOMAIN}_{device_id}_{zone_id}_window_open"
         self._attr_icon = "mdi:window-open-variant"
-    
+
     @property
     def name(self) -> str:
         """Return the name of the sensor."""
@@ -351,7 +346,7 @@ class ElnurGabarronPresenceSensor(ElnurGabarronSensorBase):
         super().__init__(coordinator, full_device_id, device_id, zone_id, zone_name)
         self._attr_unique_id = f"{DOMAIN}_{device_id}_{zone_id}_presence"
         self._attr_icon = "mdi:motion-sensor"
-    
+
     @property
     def name(self) -> str:
         """Return the name of the sensor."""
@@ -375,7 +370,7 @@ class ElnurGabarronTrueRadiantSensor(ElnurGabarronSensorBase):
         super().__init__(coordinator, full_device_id, device_id, zone_id, zone_name)
         self._attr_unique_id = f"{DOMAIN}_{device_id}_{zone_id}_true_radiant"
         self._attr_icon = "mdi:radiator"
-    
+
     @property
     def name(self) -> str:
         """Return the name of the sensor."""
@@ -399,7 +394,7 @@ class ElnurGabarronExtraEnergySensor(ElnurGabarronSensorBase):
         super().__init__(coordinator, full_device_id, device_id, zone_id, zone_name)
         self._attr_unique_id = f"{DOMAIN}_{device_id}_{zone_id}_extra_energy"
         self._attr_icon = "mdi:lightning-bolt-circle"
-    
+
     @property
     def name(self) -> str:
         """Return the name of the sensor."""
@@ -426,7 +421,7 @@ class ElnurGabarronEcoTempSensor(ElnurGabarronSensorBase):
         self._attr_device_class = SensorDeviceClass.TEMPERATURE
         self._attr_icon = "mdi:leaf"
         self._attr_entity_registry_enabled_default = False  # Disabled by default (use number entities instead)
-    
+
     @property
     def name(self) -> str:
         """Return the name of the sensor."""
@@ -456,7 +451,7 @@ class ElnurGabarronComfortTempSensor(ElnurGabarronSensorBase):
         self._attr_device_class = SensorDeviceClass.TEMPERATURE
         self._attr_icon = "mdi:sofa"
         self._attr_entity_registry_enabled_default = False  # Disabled by default (use number entities instead)
-    
+
     @property
     def name(self) -> str:
         """Return the name of the sensor."""
@@ -486,7 +481,7 @@ class ElnurGabarronAntiFrostTempSensor(ElnurGabarronSensorBase):
         self._attr_device_class = SensorDeviceClass.TEMPERATURE
         self._attr_icon = "mdi:snowflake-alert"
         self._attr_entity_registry_enabled_default = False  # Disabled by default (use number entities instead)
-    
+
     @property
     def name(self) -> str:
         """Return the name of the sensor."""
@@ -514,7 +509,7 @@ class ElnurGabarronPrioritySensor(ElnurGabarronSensorBase):
         self._attr_unique_id = f"{DOMAIN}_{device_id}_{zone_id}_priority"
         self._attr_icon = "mdi:priority-high"
         self._attr_entity_registry_enabled_default = False  # Disabled by default
-    
+
     @property
     def name(self) -> str:
         """Return the name of the sensor."""
@@ -540,7 +535,7 @@ class ElnurGabarronErrorCodeSensor(ElnurGabarronSensorBase):
         self._attr_icon = "mdi:alert-circle"
         self._attr_entity_category = EntityCategory.DIAGNOSTIC
         self._attr_entity_registry_enabled_default = False  # Disabled by default
-    
+
     @property
     def name(self) -> str:
         """Return the name of the sensor."""
@@ -569,7 +564,7 @@ class ElnurGabarronFirmwareVersionSensor(ElnurGabarronSensorBase):
         self._attr_icon = "mdi:chip"
         self._attr_entity_category = EntityCategory.DIAGNOSTIC
         self._attr_entity_registry_enabled_default = False  # Disabled by default
-    
+
     @property
     def name(self) -> str:
         """Return the name of the sensor."""
@@ -581,7 +576,7 @@ class ElnurGabarronFirmwareVersionSensor(ElnurGabarronSensorBase):
         version = self.zone_data.get("version", {})
         fw_version = version.get("fw_version")
         hw_version = version.get("hw_version")
-        
+
         if fw_version and hw_version:
             return f"FW: {fw_version} / HW: {hw_version}"
         elif fw_version:
@@ -606,7 +601,7 @@ class ElnurGabarronChargingSlot1Sensor(ElnurGabarronSensorBase):
         super().__init__(coordinator, full_device_id, device_id, zone_id, zone_name)
         self._attr_unique_id = f"{DOMAIN}_{device_id}_{zone_id}_charging_slot1"
         self._attr_icon = "mdi:timer"
-    
+
     @property
     def name(self) -> str:
         """Return the name of the sensor."""
@@ -618,18 +613,18 @@ class ElnurGabarronChargingSlot1Sensor(ElnurGabarronSensorBase):
         setup = self.zone_data.get("setup", {})
         charging_conf = setup.get("charging_conf", {})
         slot_1 = charging_conf.get("slot_1", {})
-        
+
         start = slot_1.get("start", 0)
         end = slot_1.get("end", 0)
-        
+
         # If start == end == 0, slot is disabled
         if start == 0 and end == 0:
             return "Disabled"
-        
+
         # If end > start, it's a valid time range
         if end > start:
             return f"{_minutes_to_time(start)} - {_minutes_to_time(end)}"
-        
+
         return "Not configured"
 
 
@@ -641,7 +636,7 @@ class ElnurGabarronChargingSlot2Sensor(ElnurGabarronSensorBase):
         super().__init__(coordinator, full_device_id, device_id, zone_id, zone_name)
         self._attr_unique_id = f"{DOMAIN}_{device_id}_{zone_id}_charging_slot2"
         self._attr_icon = "mdi:timer"
-    
+
     @property
     def name(self) -> str:
         """Return the name of the sensor."""
@@ -653,18 +648,18 @@ class ElnurGabarronChargingSlot2Sensor(ElnurGabarronSensorBase):
         setup = self.zone_data.get("setup", {})
         charging_conf = setup.get("charging_conf", {})
         slot_2 = charging_conf.get("slot_2", {})
-        
+
         start = slot_2.get("start", 0)
         end = slot_2.get("end", 0)
-        
+
         # If start == end == 0, slot is disabled
         if start == 0 and end == 0:
             return "Disabled"
-        
+
         # If end > start, it's a valid time range
         if end > start:
             return f"{_minutes_to_time(start)} - {_minutes_to_time(end)}"
-        
+
         return "Not configured"
 
 
@@ -676,7 +671,7 @@ class ElnurGabarronChargingDaysSensor(ElnurGabarronSensorBase):
         super().__init__(coordinator, full_device_id, device_id, zone_id, zone_name)
         self._attr_unique_id = f"{DOMAIN}_{device_id}_{zone_id}_charging_days"
         self._attr_icon = "mdi:calendar-week"
-    
+
     @property
     def name(self) -> str:
         """Return the name of the sensor."""
@@ -684,24 +679,21 @@ class ElnurGabarronChargingDaysSensor(ElnurGabarronSensorBase):
 
     @property
     def native_value(self) -> str | None:
-        """Return the active charging days.
-        """
+        """Return the active charging days."""
         setup = self.zone_data.get("setup", {})
         charging_conf = setup.get("charging_conf", {})
         active_days = charging_conf.get("active_days", [])
-        
-        
+
         if not active_days or len(active_days) != 7:
             return "Not configured"
-        
+
         day_names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
         active = [day_names[i] for i, is_active in enumerate(active_days) if is_active]
-        
+
         if not active:
             return "No days selected"
-        
+
         if len(active) == 7:
             return "Every day"
-        
-        return ", ".join(active)
 
+        return ", ".join(active)
