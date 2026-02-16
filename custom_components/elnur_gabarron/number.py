@@ -42,8 +42,13 @@ async def async_setup_entry(
     _LOGGER.info("Added %s Elnur Gabarron number entities", len(entities))
 
 
-class ElnurGabarronNumberBase(CoordinatorEntity, NumberEntity):
+class ElnurGabarronScheduleTemperatureBase(CoordinatorEntity, NumberEntity):
     """Base class for Elnur Gabarron number entities."""
+
+    status_key: str
+    name_suffix: str
+    setting_suffix: str
+    icon_suffix: str
 
     def __init__(
         self,
@@ -59,6 +64,15 @@ class ElnurGabarronNumberBase(CoordinatorEntity, NumberEntity):
         self._device_id = device_id
         self._zone_id = zone_id
         self._initial_zone_name = zone_name
+
+        self._attr_unique_id = f"{DOMAIN}_{device_id}_{zone_id}_{self.status_key}_setting"
+        self._attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
+        self._attr_icon = f"mdi:{self.icon_suffix}"
+        self._attr_mode = NumberMode.BOX
+        self._attr_native_min_value = 7.0
+        self._attr_native_max_value = 30.0
+        self._attr_native_step = 0.5
+        self._attr_entity_category = EntityCategory.CONFIG
 
     @property
     def zone_data(self) -> dict[str, Any]:
@@ -108,206 +122,68 @@ class ElnurGabarronNumberBase(CoordinatorEntity, NumberEntity):
         """Return if entity is available."""
         return self.coordinator.last_update_success and self._zone_key in self.coordinator.data
 
+    @property
+    def name(self) -> str:
+        """Return the name of the number entity."""
+        return f"{self.zone_name} {self.name_suffix}"
 
-class ElnurGabarronEcoTempNumber(ElnurGabarronNumberBase):
+    @property
+    def native_value(self) -> float | None:
+        """Return the temperature setting"""
+        return self._get_temp_from_status()
+
+    async def async_set_native_value(self, value: float) -> None:
+        """Set new temperature for self.status_key."""
+        await self._set_temp_value(value=value)
+
+    def _get_temp_from_status(self) -> float | None:
+        """Extract a temperature value from zone status for self.status_key."""
+        status = self.zone_data.get("status", {})
+        temp = status.get(self.status_key)
+        if temp is not None:
+            try:
+                return float(temp)
+            except (ValueError, TypeError):
+                return None
+        return None
+
+    async def _set_temp_value(self, value: float) -> None:
+        """Set a temperature value via API and optimistically update state."""
+        _LOGGER.info("Setting %s temperature for %s zone %s to %s°C", self.status_key, self._device_id, self._zone_id, value)
+        try:
+            control_data = {self.status_key: str(value), "units": "C"}
+            success = await self.coordinator.api.set_control(self._device_id, control_data, self._zone_id)
+            if success:
+                if self._zone_key in self.coordinator.data:
+                    status = self.coordinator.data[self._zone_key].get("status", {})
+                    status[self.status_key] = str(value)
+                    self.async_write_ha_state()
+                    _LOGGER.info("Successfully set %s temperature to %s°C", self.status_key, value)
+                else:
+                    _LOGGER.error("Failed to set %s temperature", self.status_key)
+        except Exception as err:
+            _LOGGER.error("Error setting %s temperature: %s", self.status_key, err)
+
+
+class ElnurGabarronEcoTempNumber(ElnurGabarronScheduleTemperatureBase):
     """Economy temperature setting number."""
 
-    def __init__(
-        self,
-        coordinator: ElnurSocketIOCoordinator,
-        zone_key: str,
-        device_id: str,
-        zone_id: int,
-        zone_name: str,
-    ) -> None:
-        """Initialize the eco temp number."""
-        super().__init__(coordinator, zone_key, device_id, zone_id, zone_name)
-        self._attr_unique_id = f"{DOMAIN}_{device_id}_{zone_id}_eco_temp_setting"
-        self._attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
-        self._attr_icon = "mdi:leaf"
-        self._attr_mode = NumberMode.BOX
-        self._attr_native_min_value = 7.0
-        self._attr_native_max_value = 30.0
-        self._attr_native_step = 0.5
-        self._attr_entity_category = EntityCategory.CONFIG
-    
-    @property
-    def name(self) -> str:
-        """Return the name of the number entity."""
-        return f"{self.zone_name} Economy Temperature"
-
-    @property
-    def native_value(self) -> float | None:
-        """Return the economy temperature setting."""
-        status = self.zone_data.get("status", {})
-        temp = status.get("eco_temp")
-        if temp is not None:
-            try:
-                return float(temp)
-            except (ValueError, TypeError):
-                return None
-        return None
-
-    async def async_set_native_value(self, value: float) -> None:
-        """Set new economy temperature."""
-        _LOGGER.info("Setting economy temperature for %s zone %s to %s°C", self._device_id, self._zone_id, value)
-        
-        try:
-            # Send control command to API
-            control_data = {
-                "eco_temp": str(value),
-                "units": "C"
-            }
-            success = await self.coordinator.api.set_control(
-                self._device_id, 
-                control_data, 
-                self._zone_id
-            )
-            
-            if success:
-                # Optimistically update the state
-                if self._zone_key in self.coordinator.data:
-                    status = self.coordinator.data[self._zone_key].get("status", {})
-                    status["eco_temp"] = str(value)
-                    self.async_write_ha_state()
-                    _LOGGER.info("Successfully set economy temperature to %s°C", value)
-                else:
-                    _LOGGER.error("Failed to set economy temperature")
-        except Exception as err:
-            _LOGGER.error("Error setting economy temperature: %s", err)
+    status_key = "eco_temp"
+    name_suffix = "Economy Temperature"
+    icon_suffix = "leaf"
 
 
-class ElnurGabarronComfortTempNumber(ElnurGabarronNumberBase):
+class ElnurGabarronComfortTempNumber(ElnurGabarronScheduleTemperatureBase):
     """Comfort temperature setting number."""
 
-    def __init__(
-        self,
-        coordinator: ElnurSocketIOCoordinator,
-        zone_key: str,
-        device_id: str,
-        zone_id: int,
-        zone_name: str,
-    ) -> None:
-        """Initialize the comfort temp number."""
-        super().__init__(coordinator, zone_key, device_id, zone_id, zone_name)
-        self._attr_unique_id = f"{DOMAIN}_{device_id}_{zone_id}_comfort_temp_setting"
-        self._attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
-        self._attr_icon = "mdi:sofa"
-        self._attr_mode = NumberMode.BOX
-        self._attr_native_min_value = 7.0
-        self._attr_native_max_value = 30.0
-        self._attr_native_step = 0.5
-        self._attr_entity_category = EntityCategory.CONFIG
-    
-    @property
-    def name(self) -> str:
-        """Return the name of the number entity."""
-        return f"{self.zone_name} Comfort Temperature"
-
-    @property
-    def native_value(self) -> float | None:
-        """Return the comfort temperature setting."""
-        status = self.zone_data.get("status", {})
-        temp = status.get("comf_temp")
-        if temp is not None:
-            try:
-                return float(temp)
-            except (ValueError, TypeError):
-                return None
-        return None
-
-    async def async_set_native_value(self, value: float) -> None:
-        """Set new comfort temperature."""
-        _LOGGER.info("Setting comfort temperature for %s zone %s to %s°C", self._device_id, self._zone_id, value)
-        
-        try:
-            # Send control command to API
-            control_data = {
-                "comf_temp": str(value),
-                "units": "C"
-            }
-            success = await self.coordinator.api.set_control(
-                self._device_id, 
-                control_data, 
-                self._zone_id
-            )
-            
-            if success:
-                # Optimistically update the state
-                if self._zone_key in self.coordinator.data:
-                    status = self.coordinator.data[self._zone_key].get("status", {})
-                    status["comf_temp"] = str(value)
-                    self.async_write_ha_state()
-                    _LOGGER.info("Successfully set comfort temperature to %s°C", value)
-                else:
-                    _LOGGER.error("Failed to set comfort temperature")
-        except Exception as err:
-            _LOGGER.error("Error setting comfort temperature: %s", err)
+    status_key = "comf_temp"
+    name_suffix = "Comfort Temperature"
+    icon_suffix = "sofa"
 
 
-class ElnurGabarronAntiFrostTempNumber(ElnurGabarronNumberBase):
+class ElnurGabarronAntiFrostTempNumber(ElnurGabarronScheduleTemperatureBase):
     """Anti-frost temperature setting number."""
 
-    def __init__(
-        self,
-        coordinator: ElnurSocketIOCoordinator,
-        zone_key: str,
-        device_id: str,
-        zone_id: int,
-        zone_name: str,
-    ) -> None:
-        """Initialize the anti-frost temp number."""
-        super().__init__(coordinator, zone_key, device_id, zone_id, zone_name)
-        self._attr_unique_id = f"{DOMAIN}_{device_id}_{zone_id}_antifrost_temp_setting"
-        self._attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
-        self._attr_icon = "mdi:snowflake-alert"
-        self._attr_mode = NumberMode.BOX
-        self._attr_native_min_value = 5.0
-        self._attr_native_max_value = 15.0
-        self._attr_native_step = 0.5
-        self._attr_entity_category = EntityCategory.CONFIG
-    
-    @property
-    def name(self) -> str:
-        """Return the name of the number entity."""
-        return f"{self.zone_name} Anti-Frost Temperature"
-
-    @property
-    def native_value(self) -> float | None:
-        """Return the anti-frost temperature setting."""
-        status = self.zone_data.get("status", {})
-        temp = status.get("ice_temp")
-        if temp is not None:
-            try:
-                return float(temp)
-            except (ValueError, TypeError):
-                return None
-        return None
-
-    async def async_set_native_value(self, value: float) -> None:
-        """Set new anti-frost temperature."""
-        _LOGGER.info("Setting anti-frost temperature for %s zone %s to %s°C", self._device_id, self._zone_id, value)
-        
-        try:
-            # Send control command to API
-            control_data = {
-                "ice_temp": str(value),
-                "units": "C"
-            }
-            success = await self.coordinator.api.set_control(
-                self._device_id, 
-                control_data, 
-                self._zone_id
-            )
-            
-            if success:
-                # Optimistically update the state
-                if self._zone_key in self.coordinator.data:
-                    status = self.coordinator.data[self._zone_key].get("status", {})
-                    status["ice_temp"] = str(value)
-                    self.async_write_ha_state()
-                    _LOGGER.info("Successfully set anti-frost temperature to %s°C", value)
-                else:
-                    _LOGGER.error("Failed to set anti-frost temperature")
-        except Exception as err:
-            _LOGGER.error("Error setting anti-frost temperature: %s", err)
+    status_key = "ice_temp"
+    name_suffix = "Anti-Frost Temperature"
+    icon_suffix = "snowflake-alert"
