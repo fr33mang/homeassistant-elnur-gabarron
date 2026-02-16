@@ -5,20 +5,25 @@
 [![Hassfest](https://github.com/fr33mang/homeassistant-elnur-gabarron/workflows/Validate%20with%20hassfest/badge.svg)](https://github.com/fr33mang/homeassistant-elnur-gabarron/actions/workflows/hassfest.yaml)
 [![HACS Validation](https://github.com/fr33mang/homeassistant-elnur-gabarron/workflows/HACS%20Validation/badge.svg)](https://github.com/fr33mang/homeassistant-elnur-gabarron/actions/workflows/hacs.yaml)
 
-Elnur Gabarron Heaters integration based on reverse engineered API. Control your electric heaters using real-time Socket.IO updates and the unofficial Elnur API.
+Unoficial Elnur Gabarron Heaters integration based on reverse engineered API. Control your electric heaters using real-time Socket.IO updates and the unofficial Elnur API.
 
 ## Features
 
-- ✅ **Real-time updates** - Instant synchronization via Socket.IO
-- ✅ **Automatic device discovery** - Each radiator zone appears as a separate device
-- ✅ **Temperature control** - Set target temperature and view current temperature
-- ✅ **Multiple temperature presets** - Configure Eco, Comfort, and Anti-frost temperatures
-- ✅ **Power management** - Turn heaters on/off
-- ✅ **Comprehensive sensors** - Temperature, power, charge level, error codes, firmware
-- ✅ **Auto-reconnection** - Seamless recovery from connection issues
-- ✅ **Dynamic naming** - Device names sync from Elnur app
+- **Supports only heaters** - I don't have other devices to test and implement support for them
+- **Real-time updates** - Instant synchronization via Socket.IO
+- **Automatic device discovery** - Each radiator zone appears as a separate device
+- **Temperature control** - Set target temperature and view current temperature
+- **Multiple temperature presets** - Configure Eco, Comfort, and Anti-frost temperatures
+- **Power management** - Turn heaters on/off
+- **Comprehensive sensors** - Temperature, power, charge level, error codes, firmware
+- **Auto-reconnection** - Seamless recovery from connection issues
+- **Dynamic naming** - Device names sync from Elnur app
 
 ## Installation
+
+### Option 0: HACS Button
+
+In progress
 
 ### Option 1: HACS (Recommended)
 
@@ -100,7 +105,7 @@ Only the actual radiator zones appear as devices—no empty hub devices are crea
 
 ### Authentication fails
 - Verify credentials work on https://remotecontrol.elnur.es
-- Check serial ID (usually `7`)
+- Check serial ID (usually `7`). You can check browser logs in dev console Network tab
 - Review Home Assistant logs
 - Check client_id and client_secret (they can be changed and need to be found in a browser history base64 encoded)
 
@@ -109,28 +114,10 @@ Only the actual radiator zones appear as devices—no empty hub devices are crea
 - Verify no firewall blocking `api-elnur.helki.com`
 - Look for reconnection messages (normal every ~40s)
 
-## Repository Structure
-
-```
-custom_components/elnur_gabarron/
-├── __init__.py                  # Integration setup
-├── api.py                       # REST API client with OAuth2
-├── climate.py                   # Climate platform (thermostats)
-├── number.py                    # Number platform (temperature presets)
-├── sensor.py                    # Sensor platform (readings & status)
-├── socketio_coordinator.py      # Socket.IO coordinator (real-time updates)
-├── config_flow.py               # Configuration UI
-├── const.py                     # Constants & API endpoints
-├── manifest.json                # Integration metadata
-└── translations/
-    └── en.json                  # UI translations
-```
-
 ## Support
 
-- **Official Web App**: https://remotecontrol.elnur.es
+- **Official Elnur Gabarron Web App**: https://remotecontrol.elnur.es
 - **Elnur Website**: https://elnur.es
-- **API Base**: https://api-elnur.helki.com
 - **GitHub Issues**: [Report a bug or request a feature](https://github.com/fr33mang/homeassistant-elnur-gabarron/issues)
 
 ## Notes
