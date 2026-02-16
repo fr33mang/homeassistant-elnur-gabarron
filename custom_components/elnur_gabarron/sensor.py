@@ -54,10 +54,6 @@ async def async_setup_entry(
                 ElnurGabarronPresenceSensor(coordinator, zone_key, actual_device_id, zone_id, zone_name),
                 ElnurGabarronTrueRadiantSensor(coordinator, zone_key, actual_device_id, zone_id, zone_name),
                 ElnurGabarronExtraEnergySensor(coordinator, zone_key, actual_device_id, zone_id, zone_name),
-                # Temperature settings
-                ElnurGabarronEcoTempSensor(coordinator, zone_key, actual_device_id, zone_id, zone_name),
-                ElnurGabarronComfortTempSensor(coordinator, zone_key, actual_device_id, zone_id, zone_name),
-                ElnurGabarronAntiFrostTempSensor(coordinator, zone_key, actual_device_id, zone_id, zone_name),
                 # Configuration sensors (disabled by default)
                 ElnurGabarronPrioritySensor(coordinator, zone_key, actual_device_id, zone_id, zone_name),
                 ElnurGabarronErrorCodeSensor(coordinator, zone_key, actual_device_id, zone_id, zone_name),
