@@ -150,7 +150,7 @@ class ElnurGabarronScheduleTemperatureBase(CoordinatorEntity, NumberEntity):
         return None
 
     async def _set_temp_value(self, value: float) -> None:
-        """Set a temperature value via API and optimistically update state."""
+        """Set a temperature value via the API. Real state arrives via Socket.IO."""
         _LOGGER.debug(
             "Setting %s temperature for %s zone %s to %s°C",
             self.status_key,
@@ -161,18 +161,8 @@ class ElnurGabarronScheduleTemperatureBase(CoordinatorEntity, NumberEntity):
         try:
             control_data = {self.status_key: str(value), "units": "C"}
             success = await self.coordinator.api.set_control(self._device_id, control_data, self._zone_id)
-            if success:
-                if self._zone_key in self.coordinator.data:
-                    status = self.coordinator.data[self._zone_key].get("status", {})
-                    status[self.status_key] = str(value)
-                    self.async_write_ha_state()
-                    _LOGGER.debug(
-                        "Successfully set %s temperature to %s°C",
-                        self.status_key,
-                        value,
-                    )
-                else:
-                    _LOGGER.error("Failed to set %s temperature", self.status_key)
+            if not success:
+                _LOGGER.error("Failed to set %s temperature", self.status_key)
         except (aiohttp.ClientError, asyncio.TimeoutError) as err:
             _LOGGER.error("Error setting %s temperature: %s", self.status_key, err)
 
