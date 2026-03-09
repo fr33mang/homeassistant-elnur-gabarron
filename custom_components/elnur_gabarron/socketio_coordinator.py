@@ -3,6 +3,7 @@
 import asyncio
 import json
 import logging
+import time
 from typing import Any
 from urllib.parse import urlencode
 
@@ -325,7 +326,7 @@ class ElnurSocketIOCoordinator(DataUpdateCoordinator):
                 self._reconnect_count = 0
                 self._consecutive_connection_failures = 0
                 reconnect_delay = 5
-                last_activity = asyncio.get_event_loop().time()
+                last_activity = time.monotonic()
                 self._last_update_time = last_activity
                 self._last_successful_connect_time = last_activity
                 poll_count = 0
@@ -346,7 +347,7 @@ class ElnurSocketIOCoordinator(DataUpdateCoordinator):
                 while self._connected:
                     try:
                         poll_count += 1
-                        current_time = asyncio.get_event_loop().time()
+                        current_time = time.monotonic()
 
                         # Watchdog: Check for stale connection (no real updates in 5 minutes)
                         time_since_update = current_time - self._last_update_time

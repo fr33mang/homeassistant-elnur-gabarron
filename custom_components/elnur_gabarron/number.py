@@ -1,8 +1,10 @@
 """Number platform for Elnur Gabarron."""
 
+import asyncio
 import logging
 from typing import Any
 
+import aiohttp
 from homeassistant.components.number import NumberEntity, NumberMode
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import UnitOfTemperature
@@ -43,7 +45,7 @@ async def async_setup_entry(
         )
 
     async_add_entities(entities)
-    _LOGGER.info("Added %s Elnur Gabarron number entities", len(entities))
+    _LOGGER.debug("Added %s Elnur Gabarron number entities", len(entities))
 
 
 class ElnurGabarronScheduleTemperatureBase(CoordinatorEntity, NumberEntity):
@@ -149,7 +151,7 @@ class ElnurGabarronScheduleTemperatureBase(CoordinatorEntity, NumberEntity):
 
     async def _set_temp_value(self, value: float) -> None:
         """Set a temperature value via API and optimistically update state."""
-        _LOGGER.info(
+        _LOGGER.debug(
             "Setting %s temperature for %s zone %s to %s°C",
             self.status_key,
             self._device_id,
@@ -164,14 +166,14 @@ class ElnurGabarronScheduleTemperatureBase(CoordinatorEntity, NumberEntity):
                     status = self.coordinator.data[self._zone_key].get("status", {})
                     status[self.status_key] = str(value)
                     self.async_write_ha_state()
-                    _LOGGER.info(
+                    _LOGGER.debug(
                         "Successfully set %s temperature to %s°C",
                         self.status_key,
                         value,
                     )
                 else:
                     _LOGGER.error("Failed to set %s temperature", self.status_key)
-        except Exception as err:
+        except (aiohttp.ClientError, asyncio.TimeoutError) as err:
             _LOGGER.error("Error setting %s temperature: %s", self.status_key, err)
 
 
