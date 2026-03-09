@@ -7,6 +7,9 @@
 
 Unoficial Elnur Gabarron Heaters integration based on reverse engineered API. Control your electric heaters using real-time Socket.IO updates and the unofficial Elnur API.
 
+<img width="1386" height="574" alt="image" src="https://github.com/user-attachments/assets/e01af915-97be-4995-bc74-12f40847fb1f" />
+
+
 ## Features
 
 - **Supports only heaters** - I don't have other devices to test and implement support for them
@@ -66,10 +69,16 @@ Each radiator zone appears as a **separate device** containing all its entities:
 - HVAC modes (Heat/Off)
 - HVAC actions (Heating/Idle/Off)
 
+<img width="380" height="385" alt="image" src="https://github.com/user-attachments/assets/8cf01a4d-4a1a-45a3-91d2-e33b07f166fc" />
+
+
 ### Temperature Controls (Configuration Section, per zone)
 - **Anti-Frost Temperature** (5-15°C) - Freeze protection setpoint
 - **Economy Temperature** (7-30°C) - Energy-saving mode setpoint
 - **Comfort Temperature** (7-30°C) - Maximum comfort setpoint
+
+<img width="261" height="234" alt="image" src="https://github.com/user-attachments/assets/db54a8a7-7234-4738-945a-5e8789110324" />
+
 
 ### Binary Sensors (per zone)
 - **Heating** - Whether the heating element is active
@@ -87,6 +96,9 @@ Each radiator zone appears as a **separate device** containing all its entities:
 - **Error Code** - Device error status
 - **Firmware Version** - Installed firmware
 - **Charging Schedule** - Active charging periods and days
+
+<img width="411" height="590" alt="image" src="https://github.com/user-attachments/assets/e5054f85-662e-4714-b30a-0b067c63c0af" />
+
 
 Only the actual radiator zones appear as devices—no empty hub devices are created.
 
