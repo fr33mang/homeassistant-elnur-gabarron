@@ -3,18 +3,18 @@
 import logging
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import Platform
+from homeassistant.const import CONF_PASSWORD, CONF_USERNAME, Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import ElnurGabarronAPI, ElnurGabarronAPIError
-from .const import CONF_PASSWORD, CONF_SERIAL_ID, CONF_USERNAME, DEFAULT_SERIAL_ID, DOMAIN
+from .const import CONF_SERIAL_ID, DEFAULT_SERIAL_ID, DOMAIN
 from .socketio_coordinator import ElnurSocketIOCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS = [Platform.CLIMATE, Platform.NUMBER, Platform.SENSOR]
+PLATFORMS = [Platform.BINARY_SENSOR, Platform.CLIMATE, Platform.NUMBER, Platform.SENSOR]
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -76,7 +76,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Start Socket.IO listener AFTER platforms are set up (non-blocking)
     # This will update zone names dynamically when dev_data is received
     _LOGGER.debug("Starting Socket.IO real-time listener...")
-    await coordinator.async_start()
+    await coordinator.async_start(entry)
 
     _LOGGER.debug("Elnur Gabarron integration setup complete")
     return True

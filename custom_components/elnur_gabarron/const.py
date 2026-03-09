@@ -3,8 +3,6 @@
 DOMAIN = "elnur_gabarron"
 
 # Configuration
-CONF_USERNAME = "username"
-CONF_PASSWORD = "password"
 CONF_SERIAL_ID = "serial_id"
 
 # API Constants

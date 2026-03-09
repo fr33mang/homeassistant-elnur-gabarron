@@ -8,6 +8,7 @@ from homeassistant.components.climate import ClimateEntity, ClimateEntityFeature
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -34,18 +35,12 @@ async def async_setup_entry(
 
     async_add_entities(entities)
 
-    # Listen for options updates
-    entry.async_on_unload(entry.add_update_listener(update_listener))
-
-
-async def update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Handle options update."""
-    await hass.config_entries.async_reload(entry.entry_id)
-
 
 class ElnurGabarronClimate(CoordinatorEntity, ClimateEntity):
     """Representation of an Elnur Gabarron heater."""
 
+    _attr_has_entity_name = True
+    _attr_name = None
     _attr_temperature_unit = UnitOfTemperature.CELSIUS
     _attr_supported_features = (
         ClimateEntityFeature.TARGET_TEMPERATURE | ClimateEntityFeature.TURN_ON | ClimateEntityFeature.TURN_OFF
@@ -84,50 +79,34 @@ class ElnurGabarronClimate(CoordinatorEntity, ClimateEntity):
         self._optimistic_hvac_action: HVACAction | None = None
 
     @property
-    def name(self) -> str:
-        """Return the name of the entity (dynamic from dev_data)."""
-        zone_data = self.zone_data
-        zone_name = zone_data.get("name")
-
-        if zone_name:
-            return zone_name
-        else:
-            # Fallback if API doesn't provide a name (shouldn't happen normally)
-            return f"Heater Zone {self._zone_id}"
-
-    @property
-    def device_info(self) -> dict[str, Any]:
+    def device_info(self) -> DeviceInfo:
         """Return device information.
 
         Each zone is a separate device in Home Assistant.
         """
         zone_data = self.zone_data
 
-        # Get power info from setup if available
         setup = zone_data.get("setup", {})
         factory_opts = setup.get("factory_options", {})
         accumulator_power = factory_opts.get("accumulator_power", "")
         emitter_power = factory_opts.get("emitter_power", "")
 
-        # Build model name with power info and location context
         model_parts = [MODEL]
         if accumulator_power:
             model_parts.append(f"{accumulator_power}W")
         if emitter_power:
             model_parts.append(f"(emitter: {emitter_power}W)")
-        model_name = " ".join(model_parts)
 
-        # Get location context from zone data
         device_name = zone_data.get("device_name", "")
         group_name = zone_data.get("group_name", "")
 
-        return {
-            "identifiers": {(DOMAIN, f"{self._device_id}_zone{self._zone_id}")},
-            "name": self.name,
-            "manufacturer": MANUFACTURER,
-            "model": model_name,
-            "suggested_area": device_name if device_name else group_name,
-        }
+        return DeviceInfo(
+            identifiers={(DOMAIN, f"{self._device_id}_zone{self._zone_id}")},
+            name=self.name,
+            manufacturer=MANUFACTURER,
+            model=" ".join(model_parts),
+            suggested_area=device_name or group_name,
+        )
 
     @property
     def zone_data(self) -> dict[str, Any]:

@@ -7,6 +7,7 @@ from typing import Any
 from urllib.parse import urlencode
 
 import aiohttp
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
@@ -90,11 +91,13 @@ class ElnurSocketIOCoordinator(DataUpdateCoordinator):
         """Return the group/home name."""
         return self._group_name
 
-    async def async_start(self) -> None:
+    async def async_start(self, entry: ConfigEntry) -> None:
         """Start the Socket.IO listener."""
         if self._listener_task is None or self._listener_task.done():
             _LOGGER.debug("Starting Socket.IO listener")
-            self._listener_task = asyncio.create_task(self._socketio_listener())
+            self._listener_task = entry.async_create_background_task(
+                self.hass, self._socketio_listener(), "elnur_socketio_listener"
+            )
 
     async def async_stop(self) -> None:
         """Stop the Socket.IO listener."""
