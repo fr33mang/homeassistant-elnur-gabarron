@@ -1,21 +1,187 @@
 """Sensor platform for Elnur Gabarron."""
 
+from __future__ import annotations
+
 import logging
+from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any
 
-from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorStateClass
+from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorEntityDescription, SensorStateClass
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import PERCENTAGE, UnitOfPower, UnitOfTemperature
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.typing import StateType
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN, MANUFACTURER, MODEL
 from .socketio_coordinator import ElnurSocketIOCoordinator
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _int_from_status(zone_data: dict[str, Any], key: str) -> int | None:
+    """Extract an integer value from zone status."""
+    val = zone_data.get("status", {}).get(key)
+    if val is not None:
+        try:
+            return int(val)
+        except (ValueError, TypeError):
+            return None
+    return None
+
+
+def _float_from_status(zone_data: dict[str, Any], key: str) -> float | None:
+    """Extract a float value from zone status."""
+    val = zone_data.get("status", {}).get(key)
+    if val is not None:
+        try:
+            return float(val)
+        except (ValueError, TypeError):
+            return None
+    return None
+
+
+def _get_priority(zone_data: dict[str, Any]) -> str | None:
+    """Get the heating priority setting."""
+    priority = zone_data.get("setup", {}).get("priority")
+    return priority.capitalize() if priority else None
+
+
+def _get_firmware_version(zone_data: dict[str, Any]) -> str | None:
+    """Format firmware and hardware version info."""
+    version = zone_data.get("version", {})
+    fw_version = version.get("fw_version")
+    hw_version = version.get("hw_version")
+    if fw_version and hw_version:
+        return f"FW: {fw_version} / HW: {hw_version}"
+    if fw_version:
+        return f"FW: {fw_version}"
+    if hw_version:
+        return f"HW: {hw_version}"
+    return None
+
+
+def _minutes_to_time(minutes: int) -> str:
+    """Convert minutes from midnight to HH:MM format."""
+    return f"{minutes // 60:02d}:{minutes % 60:02d}"
+
+
+def _get_charging_slot(zone_data: dict[str, Any], slot_key: str) -> str | None:
+    """Format a charging slot time range."""
+    slot = zone_data.get("setup", {}).get("charging_conf", {}).get(slot_key, {})
+    start = slot.get("start", 0)
+    end = slot.get("end", 0)
+    if start == 0 and end == 0:
+        return "Disabled"
+    if end > start:
+        return f"{_minutes_to_time(start)} - {_minutes_to_time(end)}"
+    return "Not configured"
+
+
+def _get_charging_days(zone_data: dict[str, Any]) -> str | None:
+    """Format active charging days."""
+    active_days = zone_data.get("setup", {}).get("charging_conf", {}).get("active_days", [])
+    if not active_days or len(active_days) != 7:
+        return "Not configured"
+    day_names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    active = [day_names[i] for i, is_active in enumerate(active_days) if is_active]
+    if not active:
+        return "No days selected"
+    if len(active) == 7:
+        return "Every day"
+    return ", ".join(active)
+
+
+@dataclass(frozen=True, kw_only=True)
+class ElnurSensorEntityDescription(SensorEntityDescription):
+    """Describes an Elnur Gabarron sensor with a value extraction function."""
+
+    value_fn: Callable[[dict[str, Any]], StateType]
+
+
+SENSOR_DESCRIPTIONS: tuple[ElnurSensorEntityDescription, ...] = (
+    ElnurSensorEntityDescription(
+        key="charge_level",
+        name="Charge Level",
+        native_unit_of_measurement=PERCENTAGE,
+        device_class=SensorDeviceClass.BATTERY,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:battery-charging",
+        value_fn=lambda d: _int_from_status(d, "charge_level"),
+    ),
+    ElnurSensorEntityDescription(
+        key="power",
+        name="Power",
+        native_unit_of_measurement=UnitOfPower.WATT,
+        device_class=SensorDeviceClass.POWER,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:lightning-bolt",
+        value_fn=lambda d: _float_from_status(d, "power"),
+    ),
+    ElnurSensorEntityDescription(
+        key="pcb_temp",
+        name="PCB Temperature",
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        device_class=SensorDeviceClass.TEMPERATURE,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:thermometer",
+        entity_registry_enabled_default=False,
+        value_fn=lambda d: _float_from_status(d, "pcb_temp"),
+    ),
+    ElnurSensorEntityDescription(
+        key="target_charge",
+        name="Target Charge",
+        native_unit_of_measurement=PERCENTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:battery-arrow-up",
+        value_fn=lambda d: _int_from_status(d, "target_charge_per"),
+    ),
+    ElnurSensorEntityDescription(
+        key="priority",
+        name="Priority",
+        icon="mdi:priority-high",
+        entity_registry_enabled_default=False,
+        value_fn=_get_priority,
+    ),
+    ElnurSensorEntityDescription(
+        key="error_code",
+        name="Error Code",
+        icon="mdi:alert-circle",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        value_fn=lambda d: _int_from_status(d, "error_code"),
+    ),
+    ElnurSensorEntityDescription(
+        key="firmware",
+        name="Firmware Version",
+        icon="mdi:chip",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        value_fn=_get_firmware_version,
+    ),
+    ElnurSensorEntityDescription(
+        key="charging_slot1",
+        name="Charging Slot 1",
+        icon="mdi:timer",
+        value_fn=lambda d: _get_charging_slot(d, "slot_1"),
+    ),
+    ElnurSensorEntityDescription(
+        key="charging_slot2",
+        name="Charging Slot 2",
+        icon="mdi:timer",
+        value_fn=lambda d: _get_charging_slot(d, "slot_2"),
+    ),
+    ElnurSensorEntityDescription(
+        key="charging_days",
+        name="Charging Days",
+        icon="mdi:calendar-week",
+        value_fn=_get_charging_days,
+    ),
+)
 
 
 async def async_setup_entry(
@@ -26,36 +192,28 @@ async def async_setup_entry(
     """Set up Elnur Gabarron sensor entities."""
     coordinator: ElnurSocketIOCoordinator = hass.data[DOMAIN][entry.entry_id]
 
-    # Create sensor entities for each zone
-    entities = []
+    entities: list[ElnurGabarronSensor] = []
     for zone_key, zone_data in coordinator.data.items():
         zone_id = zone_data.get("zone_id")
 
-        # Extract actual device ID (without _zoneX suffix)
         if "_zone" in zone_key:
             actual_device_id = zone_key.split("_zone")[0]
         else:
             actual_device_id = zone_key
 
-        # Get zone name from data or use generic fallback
         zone_name = zone_data.get("name", f"Heater Zone {zone_id}")
 
-        # Add sensors for this zone
-        entities.extend(
-            [
-                ElnurGabarronChargeLevelSensor(coordinator, zone_key, actual_device_id, zone_id, zone_name),
-                ElnurGabarronPowerSensor(coordinator, zone_key, actual_device_id, zone_id, zone_name),
-                ElnurGabarronPCBTempSensor(coordinator, zone_key, actual_device_id, zone_id, zone_name),
-                ElnurGabarronTargetChargeSensor(coordinator, zone_key, actual_device_id, zone_id, zone_name),
-                ElnurGabarronPrioritySensor(coordinator, zone_key, actual_device_id, zone_id, zone_name),
-                ElnurGabarronErrorCodeSensor(coordinator, zone_key, actual_device_id, zone_id, zone_name),
-                ElnurGabarronFirmwareVersionSensor(coordinator, zone_key, actual_device_id, zone_id, zone_name),
-                ElnurGabarronChargingSlot1Sensor(coordinator, zone_key, actual_device_id, zone_id, zone_name),
-                ElnurGabarronChargingSlot2Sensor(coordinator, zone_key, actual_device_id, zone_id, zone_name),
-                ElnurGabarronChargingDaysSensor(coordinator, zone_key, actual_device_id, zone_id, zone_name),
-            ]
-        )
-        _LOGGER.debug("Created sensors for %s", zone_name)
+        for description in SENSOR_DESCRIPTIONS:
+            entities.append(
+                ElnurGabarronSensor(
+                    coordinator,
+                    zone_key,
+                    actual_device_id,
+                    zone_id,
+                    zone_name,
+                    description,
+                )
+            )
 
     async_add_entities(entities)
     _LOGGER.debug("Added %s Elnur Gabarron sensor entities", len(entities))
@@ -76,10 +234,10 @@ class ElnurGabarronSensorBase(CoordinatorEntity, SensorEntity):
     ) -> None:
         """Initialize the sensor."""
         super().__init__(coordinator)
-        self._zone_key = zone_key  # Full key like "device_id_zone2"
+        self._zone_key = zone_key
         self._device_id = device_id
         self._zone_id = zone_id
-        self._initial_zone_name = zone_name  # Fallback initial name
+        self._initial_zone_name = zone_name
 
     @property
     def zone_data(self) -> dict[str, Any]:
@@ -89,14 +247,7 @@ class ElnurGabarronSensorBase(CoordinatorEntity, SensorEntity):
     @property
     def zone_name(self) -> str:
         """Get the current zone name (dynamic from dev_data)."""
-        zone_data = self.zone_data
-        current_name = zone_data.get("name")
-
-        if current_name:
-            return current_name
-
-        # Fallback to initial name
-        return self._initial_zone_name
+        return self.zone_data.get("name") or self._initial_zone_name
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -133,280 +284,26 @@ class ElnurGabarronSensorBase(CoordinatorEntity, SensorEntity):
         return self.coordinator.last_update_success and self._zone_key in self.coordinator.data
 
 
-class ElnurGabarronChargeLevelSensor(ElnurGabarronSensorBase):
-    """Charge level sensor for Elnur Gabarron heater."""
+class ElnurGabarronSensor(ElnurGabarronSensorBase):
+    """Generic sensor driven by an ElnurSensorEntityDescription."""
 
-    def __init__(self, coordinator, full_device_id, device_id, zone_id, zone_name):
-        """Initialize the charge level sensor."""
-        super().__init__(coordinator, full_device_id, device_id, zone_id, zone_name)
-        self._attr_unique_id = f"{DOMAIN}_{device_id}_{zone_id}_charge_level"
-        self._attr_name = "Charge Level"
-        self._attr_native_unit_of_measurement = PERCENTAGE
-        self._attr_device_class = SensorDeviceClass.BATTERY
-        self._attr_state_class = SensorStateClass.MEASUREMENT
-        self._attr_icon = "mdi:battery-charging"
+    entity_description: ElnurSensorEntityDescription
 
-    @property
-    def native_value(self) -> int | None:
-        """Return the charge level."""
-        status = self.zone_data.get("status", {})
-        charge_level = status.get("charge_level")
-        if charge_level is not None:
-            try:
-                return int(charge_level)
-            except (ValueError, TypeError):
-                return None
-        return None
-
-
-class ElnurGabarronPowerSensor(ElnurGabarronSensorBase):
-    """Power consumption sensor for Elnur Gabarron heater."""
-
-    def __init__(self, coordinator, full_device_id, device_id, zone_id, zone_name):
-        """Initialize the power sensor."""
-        super().__init__(coordinator, full_device_id, device_id, zone_id, zone_name)
-        self._attr_unique_id = f"{DOMAIN}_{device_id}_{zone_id}_power"
-        self._attr_name = "Power"
-        self._attr_native_unit_of_measurement = UnitOfPower.WATT
-        self._attr_device_class = SensorDeviceClass.POWER
-        self._attr_state_class = SensorStateClass.MEASUREMENT
-        self._attr_icon = "mdi:lightning-bolt"
+    def __init__(
+        self,
+        coordinator: ElnurSocketIOCoordinator,
+        zone_key: str,
+        device_id: str,
+        zone_id: int,
+        zone_name: str,
+        description: ElnurSensorEntityDescription,
+    ) -> None:
+        """Initialize the sensor from a description."""
+        super().__init__(coordinator, zone_key, device_id, zone_id, zone_name)
+        self.entity_description = description
+        self._attr_unique_id = f"{DOMAIN}_{device_id}_{zone_id}_{description.key}"
 
     @property
-    def native_value(self) -> float | None:
-        """Return the power consumption."""
-        status = self.zone_data.get("status", {})
-        power = status.get("power")
-        if power is not None:
-            try:
-                return float(power)
-            except (ValueError, TypeError):
-                return None
-        return None
-
-
-class ElnurGabarronPCBTempSensor(ElnurGabarronSensorBase):
-    """PCB temperature sensor for Elnur Gabarron heater."""
-
-    def __init__(self, coordinator, full_device_id, device_id, zone_id, zone_name):
-        """Initialize the PCB temperature sensor."""
-        super().__init__(coordinator, full_device_id, device_id, zone_id, zone_name)
-        self._attr_unique_id = f"{DOMAIN}_{device_id}_{zone_id}_pcb_temp"
-        self._attr_name = "PCB Temperature"
-        self._attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
-        self._attr_device_class = SensorDeviceClass.TEMPERATURE
-        self._attr_state_class = SensorStateClass.MEASUREMENT
-        self._attr_icon = "mdi:thermometer"
-        self._attr_entity_registry_enabled_default = False
-
-    @property
-    def native_value(self) -> float | None:
-        """Return the PCB temperature."""
-        status = self.zone_data.get("status", {})
-        pcb_temp = status.get("pcb_temp")
-        if pcb_temp is not None:
-            try:
-                return float(pcb_temp)
-            except (ValueError, TypeError):
-                return None
-        return None
-
-
-class ElnurGabarronTargetChargeSensor(ElnurGabarronSensorBase):
-    """Target charge percentage sensor."""
-
-    def __init__(self, coordinator, full_device_id, device_id, zone_id, zone_name):
-        """Initialize the target charge sensor."""
-        super().__init__(coordinator, full_device_id, device_id, zone_id, zone_name)
-        self._attr_unique_id = f"{DOMAIN}_{device_id}_{zone_id}_target_charge"
-        self._attr_name = "Target Charge"
-        self._attr_native_unit_of_measurement = PERCENTAGE
-        self._attr_icon = "mdi:battery-arrow-up"
-        self._attr_state_class = SensorStateClass.MEASUREMENT
-
-    @property
-    def native_value(self) -> int | None:
-        """Return the target charge percentage."""
-        status = self.zone_data.get("status", {})
-        target = status.get("target_charge_per")
-        if target is not None:
-            try:
-                return int(target)
-            except (ValueError, TypeError):
-                return None
-        return None
-
-
-class ElnurGabarronPrioritySensor(ElnurGabarronSensorBase):
-    """Heating priority sensor."""
-
-    def __init__(self, coordinator, full_device_id, device_id, zone_id, zone_name):
-        """Initialize the priority sensor."""
-        super().__init__(coordinator, full_device_id, device_id, zone_id, zone_name)
-        self._attr_unique_id = f"{DOMAIN}_{device_id}_{zone_id}_priority"
-        self._attr_name = "Priority"
-        self._attr_icon = "mdi:priority-high"
-        self._attr_entity_registry_enabled_default = False
-
-    @property
-    def native_value(self) -> str | None:
-        """Return the heating priority setting."""
-        setup = self.zone_data.get("setup", {})
-        priority = setup.get("priority")
-        if priority:
-            return priority.capitalize()
-        return None
-
-
-class ElnurGabarronErrorCodeSensor(ElnurGabarronSensorBase):
-    """Error code sensor for diagnostics."""
-
-    def __init__(self, coordinator, full_device_id, device_id, zone_id, zone_name):
-        """Initialize the error code sensor."""
-        super().__init__(coordinator, full_device_id, device_id, zone_id, zone_name)
-        self._attr_unique_id = f"{DOMAIN}_{device_id}_{zone_id}_error_code"
-        self._attr_name = "Error Code"
-        self._attr_icon = "mdi:alert-circle"
-        self._attr_entity_category = EntityCategory.DIAGNOSTIC
-        self._attr_entity_registry_enabled_default = False
-
-    @property
-    def native_value(self) -> int | None:
-        """Return the error code."""
-        status = self.zone_data.get("status", {})
-        error_code = status.get("error_code")
-        if error_code is not None:
-            try:
-                return int(error_code)
-            except (ValueError, TypeError):
-                return None
-        return None
-
-
-class ElnurGabarronFirmwareVersionSensor(ElnurGabarronSensorBase):
-    """Firmware version sensor."""
-
-    def __init__(self, coordinator, full_device_id, device_id, zone_id, zone_name):
-        """Initialize the firmware version sensor."""
-        super().__init__(coordinator, full_device_id, device_id, zone_id, zone_name)
-        self._attr_unique_id = f"{DOMAIN}_{device_id}_{zone_id}_firmware"
-        self._attr_name = "Firmware Version"
-        self._attr_icon = "mdi:chip"
-        self._attr_entity_category = EntityCategory.DIAGNOSTIC
-        self._attr_entity_registry_enabled_default = False
-
-    @property
-    def native_value(self) -> str | None:
-        """Return the firmware version."""
-        version = self.zone_data.get("version", {})
-        fw_version = version.get("fw_version")
-        hw_version = version.get("hw_version")
-
-        if fw_version and hw_version:
-            return f"FW: {fw_version} / HW: {hw_version}"
-        elif fw_version:
-            return f"FW: {fw_version}"
-        elif hw_version:
-            return f"HW: {hw_version}"
-        return None
-
-
-def _minutes_to_time(minutes: int) -> str:
-    """Convert minutes from midnight to HH:MM format."""
-    hours = minutes // 60
-    mins = minutes % 60
-    return f"{hours:02d}:{mins:02d}"
-
-
-class ElnurGabarronChargingSlot1Sensor(ElnurGabarronSensorBase):
-    """Charging slot 1 schedule sensor."""
-
-    def __init__(self, coordinator, full_device_id, device_id, zone_id, zone_name):
-        """Initialize the charging slot 1 sensor."""
-        super().__init__(coordinator, full_device_id, device_id, zone_id, zone_name)
-        self._attr_unique_id = f"{DOMAIN}_{device_id}_{zone_id}_charging_slot1"
-        self._attr_name = "Charging Slot 1"
-        self._attr_icon = "mdi:timer"
-
-    @property
-    def native_value(self) -> str | None:
-        """Return the charging slot 1 schedule."""
-        setup = self.zone_data.get("setup", {})
-        charging_conf = setup.get("charging_conf", {})
-        slot_1 = charging_conf.get("slot_1", {})
-
-        start = slot_1.get("start", 0)
-        end = slot_1.get("end", 0)
-
-        # If start == end == 0, slot is disabled
-        if start == 0 and end == 0:
-            return "Disabled"
-
-        # If end > start, it's a valid time range
-        if end > start:
-            return f"{_minutes_to_time(start)} - {_minutes_to_time(end)}"
-
-        return "Not configured"
-
-
-class ElnurGabarronChargingSlot2Sensor(ElnurGabarronSensorBase):
-    """Charging slot 2 schedule sensor."""
-
-    def __init__(self, coordinator, full_device_id, device_id, zone_id, zone_name):
-        """Initialize the charging slot 2 sensor."""
-        super().__init__(coordinator, full_device_id, device_id, zone_id, zone_name)
-        self._attr_unique_id = f"{DOMAIN}_{device_id}_{zone_id}_charging_slot2"
-        self._attr_name = "Charging Slot 2"
-        self._attr_icon = "mdi:timer"
-
-    @property
-    def native_value(self) -> str | None:
-        """Return the charging slot 2 schedule."""
-        setup = self.zone_data.get("setup", {})
-        charging_conf = setup.get("charging_conf", {})
-        slot_2 = charging_conf.get("slot_2", {})
-
-        start = slot_2.get("start", 0)
-        end = slot_2.get("end", 0)
-
-        # If start == end == 0, slot is disabled
-        if start == 0 and end == 0:
-            return "Disabled"
-
-        # If end > start, it's a valid time range
-        if end > start:
-            return f"{_minutes_to_time(start)} - {_minutes_to_time(end)}"
-
-        return "Not configured"
-
-
-class ElnurGabarronChargingDaysSensor(ElnurGabarronSensorBase):
-    """Charging active days sensor."""
-
-    def __init__(self, coordinator, full_device_id, device_id, zone_id, zone_name):
-        """Initialize the charging days sensor."""
-        super().__init__(coordinator, full_device_id, device_id, zone_id, zone_name)
-        self._attr_unique_id = f"{DOMAIN}_{device_id}_{zone_id}_charging_days"
-        self._attr_name = "Charging Days"
-        self._attr_icon = "mdi:calendar-week"
-
-    @property
-    def native_value(self) -> str | None:
-        """Return the active charging days."""
-        setup = self.zone_data.get("setup", {})
-        charging_conf = setup.get("charging_conf", {})
-        active_days = charging_conf.get("active_days", [])
-
-        if not active_days or len(active_days) != 7:
-            return "Not configured"
-
-        day_names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-        active = [day_names[i] for i, is_active in enumerate(active_days) if is_active]
-
-        if not active:
-            return "No days selected"
-
-        if len(active) == 7:
-            return "Every day"
-
-        return ", ".join(active)
+    def native_value(self) -> StateType:
+        """Return the sensor value."""
+        return self.entity_description.value_fn(self.zone_data)

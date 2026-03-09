@@ -1,9 +1,16 @@
 """Binary sensor platform for Elnur Gabarron."""
 
+from __future__ import annotations
+
 import logging
+from dataclasses import dataclass
 from typing import Any
 
-from homeassistant.components.binary_sensor import BinarySensorDeviceClass, BinarySensorEntity
+from homeassistant.components.binary_sensor import (
+    BinarySensorDeviceClass,
+    BinarySensorEntity,
+    BinarySensorEntityDescription,
+)
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
@@ -16,6 +23,53 @@ from .socketio_coordinator import ElnurSocketIOCoordinator
 _LOGGER = logging.getLogger(__name__)
 
 
+@dataclass(frozen=True, kw_only=True)
+class ElnurBinarySensorEntityDescription(BinarySensorEntityDescription):
+    """Describes an Elnur Gabarron binary sensor with a status key."""
+
+    status_key: str
+
+
+BINARY_SENSOR_DESCRIPTIONS: tuple[ElnurBinarySensorEntityDescription, ...] = (
+    ElnurBinarySensorEntityDescription(
+        key="heating",
+        name="Heating",
+        device_class=BinarySensorDeviceClass.HEAT,
+        status_key="heating",
+    ),
+    ElnurBinarySensorEntityDescription(
+        key="charging",
+        name="Charging",
+        device_class=BinarySensorDeviceClass.BATTERY_CHARGING,
+        status_key="charging",
+    ),
+    ElnurBinarySensorEntityDescription(
+        key="window_open",
+        name="Window",
+        device_class=BinarySensorDeviceClass.WINDOW,
+        status_key="window_open",
+    ),
+    ElnurBinarySensorEntityDescription(
+        key="presence",
+        name="Presence",
+        device_class=BinarySensorDeviceClass.OCCUPANCY,
+        status_key="presence",
+    ),
+    ElnurBinarySensorEntityDescription(
+        key="true_radiant",
+        name="True Radiant",
+        icon="mdi:radiator",
+        status_key="true_radiant_active",
+    ),
+    ElnurBinarySensorEntityDescription(
+        key="extra_energy",
+        name="Extra Energy",
+        icon="mdi:lightning-bolt-circle",
+        status_key="using_extra_nrg",
+    ),
+)
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -24,7 +78,7 @@ async def async_setup_entry(
     """Set up Elnur Gabarron binary sensor entities."""
     coordinator: ElnurSocketIOCoordinator = hass.data[DOMAIN][entry.entry_id]
 
-    entities = []
+    entities: list[ElnurGabarronBinarySensor] = []
     for zone_key, zone_data in coordinator.data.items():
         zone_id = zone_data.get("zone_id")
 
@@ -35,16 +89,17 @@ async def async_setup_entry(
 
         zone_name = zone_data.get("name", f"Heater Zone {zone_id}")
 
-        entities.extend(
-            [
-                ElnurGabarronHeatingSensor(coordinator, zone_key, actual_device_id, zone_id, zone_name),
-                ElnurGabarronChargingSensor(coordinator, zone_key, actual_device_id, zone_id, zone_name),
-                ElnurGabarronWindowOpenSensor(coordinator, zone_key, actual_device_id, zone_id, zone_name),
-                ElnurGabarronPresenceSensor(coordinator, zone_key, actual_device_id, zone_id, zone_name),
-                ElnurGabarronTrueRadiantSensor(coordinator, zone_key, actual_device_id, zone_id, zone_name),
-                ElnurGabarronExtraEnergySensor(coordinator, zone_key, actual_device_id, zone_id, zone_name),
-            ]
-        )
+        for description in BINARY_SENSOR_DESCRIPTIONS:
+            entities.append(
+                ElnurGabarronBinarySensor(
+                    coordinator,
+                    zone_key,
+                    actual_device_id,
+                    zone_id,
+                    zone_name,
+                    description,
+                )
+            )
 
     async_add_entities(entities)
     _LOGGER.debug("Added %s Elnur Gabarron binary sensor entities", len(entities))
@@ -78,8 +133,7 @@ class ElnurGabarronBinarySensorBase(CoordinatorEntity, BinarySensorEntity):
     @property
     def zone_name(self) -> str:
         """Get the current zone name (dynamic from dev_data)."""
-        current_name = self.zone_data.get("name")
-        return current_name or self._initial_zone_name
+        return self.zone_data.get("name") or self._initial_zone_name
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -113,107 +167,26 @@ class ElnurGabarronBinarySensorBase(CoordinatorEntity, BinarySensorEntity):
         return self.coordinator.last_update_success and self._zone_key in self.coordinator.data
 
 
-class ElnurGabarronHeatingSensor(ElnurGabarronBinarySensorBase):
-    """Heating status binary sensor."""
+class ElnurGabarronBinarySensor(ElnurGabarronBinarySensorBase):
+    """Generic binary sensor driven by an ElnurBinarySensorEntityDescription."""
 
-    _attr_device_class = BinarySensorDeviceClass.HEAT
+    entity_description: ElnurBinarySensorEntityDescription
 
-    def __init__(self, coordinator, full_device_id, device_id, zone_id, zone_name):
-        """Initialize the heating sensor."""
-        super().__init__(coordinator, full_device_id, device_id, zone_id, zone_name)
-        self._attr_unique_id = f"{DOMAIN}_{device_id}_{zone_id}_heating"
-        self._attr_name = "Heating"
-
-    @property
-    def is_on(self) -> bool | None:
-        """Return true if the heating element is active."""
-        status = self.zone_data.get("status", {})
-        return status.get("heating")
-
-
-class ElnurGabarronChargingSensor(ElnurGabarronBinarySensorBase):
-    """Charging status binary sensor."""
-
-    _attr_device_class = BinarySensorDeviceClass.BATTERY_CHARGING
-
-    def __init__(self, coordinator, full_device_id, device_id, zone_id, zone_name):
-        """Initialize the charging sensor."""
-        super().__init__(coordinator, full_device_id, device_id, zone_id, zone_name)
-        self._attr_unique_id = f"{DOMAIN}_{device_id}_{zone_id}_charging"
-        self._attr_name = "Charging"
+    def __init__(
+        self,
+        coordinator: ElnurSocketIOCoordinator,
+        zone_key: str,
+        device_id: str,
+        zone_id: int,
+        zone_name: str,
+        description: ElnurBinarySensorEntityDescription,
+    ) -> None:
+        """Initialize the binary sensor from a description."""
+        super().__init__(coordinator, zone_key, device_id, zone_id, zone_name)
+        self.entity_description = description
+        self._attr_unique_id = f"{DOMAIN}_{device_id}_{zone_id}_{description.key}"
 
     @property
     def is_on(self) -> bool | None:
-        """Return true if the heater is charging."""
-        status = self.zone_data.get("status", {})
-        return status.get("charging")
-
-
-class ElnurGabarronWindowOpenSensor(ElnurGabarronBinarySensorBase):
-    """Window open detection binary sensor."""
-
-    _attr_device_class = BinarySensorDeviceClass.WINDOW
-
-    def __init__(self, coordinator, full_device_id, device_id, zone_id, zone_name):
-        """Initialize the window open sensor."""
-        super().__init__(coordinator, full_device_id, device_id, zone_id, zone_name)
-        self._attr_unique_id = f"{DOMAIN}_{device_id}_{zone_id}_window_open"
-        self._attr_name = "Window"
-
-    @property
-    def is_on(self) -> bool | None:
-        """Return true if window is detected as open."""
-        status = self.zone_data.get("status", {})
-        return status.get("window_open")
-
-
-class ElnurGabarronPresenceSensor(ElnurGabarronBinarySensorBase):
-    """Presence detection binary sensor."""
-
-    _attr_device_class = BinarySensorDeviceClass.OCCUPANCY
-
-    def __init__(self, coordinator, full_device_id, device_id, zone_id, zone_name):
-        """Initialize the presence sensor."""
-        super().__init__(coordinator, full_device_id, device_id, zone_id, zone_name)
-        self._attr_unique_id = f"{DOMAIN}_{device_id}_{zone_id}_presence"
-        self._attr_name = "Presence"
-
-    @property
-    def is_on(self) -> bool | None:
-        """Return true if presence is detected."""
-        status = self.zone_data.get("status", {})
-        return status.get("presence")
-
-
-class ElnurGabarronTrueRadiantSensor(ElnurGabarronBinarySensorBase):
-    """True radiant mode binary sensor."""
-
-    def __init__(self, coordinator, full_device_id, device_id, zone_id, zone_name):
-        """Initialize the true radiant sensor."""
-        super().__init__(coordinator, full_device_id, device_id, zone_id, zone_name)
-        self._attr_unique_id = f"{DOMAIN}_{device_id}_{zone_id}_true_radiant"
-        self._attr_name = "True Radiant"
-        self._attr_icon = "mdi:radiator"
-
-    @property
-    def is_on(self) -> bool | None:
-        """Return true if true radiant mode is active."""
-        status = self.zone_data.get("status", {})
-        return status.get("true_radiant_active")
-
-
-class ElnurGabarronExtraEnergySensor(ElnurGabarronBinarySensorBase):
-    """Extra energy mode binary sensor."""
-
-    def __init__(self, coordinator, full_device_id, device_id, zone_id, zone_name):
-        """Initialize the extra energy sensor."""
-        super().__init__(coordinator, full_device_id, device_id, zone_id, zone_name)
-        self._attr_unique_id = f"{DOMAIN}_{device_id}_{zone_id}_extra_energy"
-        self._attr_name = "Extra Energy"
-        self._attr_icon = "mdi:lightning-bolt-circle"
-
-    @property
-    def is_on(self) -> bool | None:
-        """Return true if extra energy mode is active."""
-        status = self.zone_data.get("status", {})
-        return status.get("using_extra_nrg")
+        """Return the binary sensor state."""
+        return self.zone_data.get("status", {}).get(self.entity_description.status_key)
