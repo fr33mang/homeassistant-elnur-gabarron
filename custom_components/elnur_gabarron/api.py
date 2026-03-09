@@ -179,9 +179,10 @@ class ElnurGabarronAPI:
                                 dev["group_name"] = group_name
                                 devices.append(dev)
                                 _LOGGER.debug(
-                                    "Device: %s (ID: %s)",
+                                    "Device: %s (ID: %s, product_id: %s)",
                                     dev.get("name"),
                                     dev.get("dev_id"),
+                                    dev.get("product_id", "unknown"),
                                 )
 
                     _LOGGER.debug(
