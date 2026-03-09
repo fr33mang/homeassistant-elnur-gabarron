@@ -128,26 +128,6 @@ class ElnurSocketIOCoordinator(DataUpdateCoordinator):
             _LOGGER.debug("Connecting to Socket.IO to fetch zone data")
             connected = await self._connect_socketio()
 
-            if not connected:
-                _LOGGER.warning("Socket.IO connection failed during startup; using fallback zone discovery")
-                # Fallback to hardcoded zones if Socket.IO fails
-                device_data = {}
-                for zone_id in [2, 3]:
-                    try:
-                        status = await self.api.get_device_status(self._device_id, zone_id)
-                        unique_key = f"{self._device_id}_zone{zone_id}"
-                        device_data[unique_key] = {
-                            "zone_id": zone_id,
-                            "status": status,
-                            "device_id": self._device_id,
-                            "device_name": self._device_name,
-                            "group_id": self._group_id,
-                            "group_name": self._group_name,
-                        }
-                    except Exception:
-                        pass
-                return device_data
-
             # Request dev_data
             token = await self.api.async_get_access_token()
             params = {
@@ -218,23 +198,6 @@ class ElnurSocketIOCoordinator(DataUpdateCoordinator):
                 except Exception as e:
                     _LOGGER.debug("Poll error: %s", e)
                     continue
-
-            _LOGGER.warning("dev_data not received within timeout; using fallback")
-            # Fallback if dev_data not received
-            for zone_id in [2, 3]:
-                try:
-                    status = await self.api.get_device_status(self._device_id, zone_id)
-                    unique_key = f"{self._device_id}_zone{zone_id}"
-                    device_data[unique_key] = {
-                        "zone_id": zone_id,
-                        "status": status,
-                        "device_id": self._device_id,
-                        "device_name": self._device_name,
-                        "group_id": self._group_id,
-                        "group_name": self._group_name,
-                    }
-                except Exception:
-                    pass
 
             return device_data
 
@@ -333,16 +296,6 @@ class ElnurSocketIOCoordinator(DataUpdateCoordinator):
                         self._consecutive_connection_failures,
                         reconnect_delay,
                     )
-
-                    # If Socket.IO has been failing for too long, try fetching via REST API as fallback
-                    if self._consecutive_connection_failures >= 10:  # ~10+ minutes of failures with backoff
-                        _LOGGER.warning("Socket.IO repeatedly failing, attempting REST API data refresh...")
-                        try:
-                            fallback_data = await self._fetch_initial_data()
-                            self.async_set_updated_data(fallback_data)
-                            _LOGGER.info("Successfully refreshed data via REST API fallback")
-                        except Exception as fallback_err:
-                            _LOGGER.error("REST API fallback also failed: %s", fallback_err)
 
                     await asyncio.sleep(reconnect_delay)
                     # Exponential backoff, max 60s
@@ -597,28 +550,6 @@ class ElnurSocketIOCoordinator(DataUpdateCoordinator):
                 _LOGGER.debug("Requested dev_data refresh via Socket.IO")
                 return
             except Exception as err:
-                _LOGGER.warning("Socket.IO refresh failed, falling back to REST API: %s", err)
+                _LOGGER.error("Socket.IO refresh failed, %s", err)
 
-        # Fallback: Refresh via REST API (status only, names come from Socket.IO)
-        try:
-            _LOGGER.debug("Refreshing data via REST API (Socket.IO unavailable)")
-            new_data = dict(self.data or {})
-            for zone_key in list(new_data.keys()):
-                zone_data = new_data.get(zone_key, {})
-                device_id = zone_data.get("device_id")
-                zone_id = zone_data.get("zone_id")
-
-                if device_id and zone_id:
-                    # Fetch latest status
-                    status = await self.api.get_device_status(device_id, zone_id)
-
-                    # Update coordinator data
-                    zone = dict(zone_data)
-                    zone["status"] = status
-                    new_data[zone_key] = zone
-
-            # Notify listeners
-            self.async_set_updated_data(new_data)
-            _LOGGER.debug("Data refreshed via REST API")
-        except Exception as err:
-            _LOGGER.error("Failed to refresh via REST API: %s", err)
+        _LOGGER.error("Socket.IO refresh failed")
