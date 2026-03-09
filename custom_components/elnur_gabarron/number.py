@@ -7,6 +7,7 @@ from homeassistant.components.number import NumberEntity, NumberMode
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import UnitOfTemperature
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -48,9 +49,10 @@ async def async_setup_entry(
 class ElnurGabarronScheduleTemperatureBase(CoordinatorEntity, NumberEntity):
     """Base class for Elnur Gabarron number entities."""
 
+    _attr_has_entity_name = True
+
     status_key: str
     name_suffix: str
-    setting_suffix: str
     icon_suffix: str
 
     def __init__(
@@ -69,6 +71,7 @@ class ElnurGabarronScheduleTemperatureBase(CoordinatorEntity, NumberEntity):
         self._initial_zone_name = zone_name
 
         self._attr_unique_id = f"{DOMAIN}_{device_id}_{zone_id}_{self.status_key}_setting"
+        self._attr_name = self.name_suffix
         self._attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
         self._attr_icon = f"mdi:{self.icon_suffix}"
         self._attr_mode = NumberMode.BOX
@@ -94,7 +97,7 @@ class ElnurGabarronScheduleTemperatureBase(CoordinatorEntity, NumberEntity):
         return self._initial_zone_name
 
     @property
-    def device_info(self) -> dict[str, Any]:
+    def device_info(self) -> DeviceInfo:
         """Return device information - must match climate/sensor entities."""
         zone_data = self.zone_data
         setup = zone_data.get("setup", {})
@@ -108,27 +111,21 @@ class ElnurGabarronScheduleTemperatureBase(CoordinatorEntity, NumberEntity):
         if emitter_power:
             model_parts.append(f"{emitter_power}W")
 
-        # Get location context from zone data
         device_name = zone_data.get("device_name", "")
         group_name = zone_data.get("group_name", "")
 
-        return {
-            "identifiers": {(DOMAIN, self._zone_key)},
-            "name": self.zone_name,
-            "manufacturer": MANUFACTURER,
-            "model": " ".join(model_parts),
-            "suggested_area": device_name if device_name else group_name,
-        }
+        return DeviceInfo(
+            identifiers={(DOMAIN, self._zone_key)},
+            name=self.zone_name,
+            manufacturer=MANUFACTURER,
+            model=" ".join(model_parts),
+            suggested_area=device_name or group_name,
+        )
 
     @property
     def available(self) -> bool:
         """Return if entity is available."""
         return self.coordinator.last_update_success and self._zone_key in self.coordinator.data
-
-    @property
-    def name(self) -> str:
-        """Return the name of the number entity."""
-        return f"{self.zone_name} {self.name_suffix}"
 
     @property
     def native_value(self) -> float | None:

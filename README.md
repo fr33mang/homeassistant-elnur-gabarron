@@ -71,16 +71,22 @@ Each radiator zone appears as a **separate device** containing all its entities:
 - **Economy Temperature** (7-30°C) - Energy-saving mode setpoint
 - **Comfort Temperature** (7-30°C) - Maximum comfort setpoint
 
+### Binary Sensors (per zone)
+- **Heating** - Whether the heating element is active
+- **Charging** - Whether the heater is charging
+- **Window** - Window open detection
+- **Presence** - Presence detection
+- **True Radiant** - True radiant mode status
+- **Extra Energy** - Extra energy mode status
+
 ### Sensors (Diagnostic Section, per zone)
-- **Current Temperature** - Room temperature reading
-- **Operating Mode** - Current mode (Off, Auto, Manual, etc.)
-- **Power Ratings** - Min/Max/Nominal power in watts
+- **Charge Level** - Accumulator charge percentage
+- **Power** - Current power consumption
+- **Target Charge** - Target charge percentage
+- **PCB Temperature** - Internal board temperature
 - **Error Code** - Device error status
 - **Firmware Version** - Installed firmware
-- **PCB Temperature** - Internal board temperature
 - **Charging Schedule** - Active charging periods and days
-
-Temperature preset sensors are disabled by default (since number controls are available).
 
 Only the actual radiator zones appear as devices—no empty hub devices are created.
 
