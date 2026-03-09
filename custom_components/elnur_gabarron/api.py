@@ -1,8 +1,9 @@
 """API Client for Elnur Gabarron heaters."""
 
+import asyncio
 import base64
 import logging
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import aiohttp
@@ -17,6 +18,8 @@ from .const import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+REQUEST_TIMEOUT = aiohttp.ClientTimeout(total=30)
 
 
 class ElnurGabarronAPIError(Exception):
@@ -41,6 +44,7 @@ class ElnurGabarronAPI:
         self._access_token = None
         self._refresh_token = None
         self._token_expires_at = None
+        self._token_lock = asyncio.Lock()
 
     async def authenticate(self) -> bool:
         """Authenticate with the API using OAuth2 password grant."""
@@ -66,15 +70,14 @@ class ElnurGabarronAPI:
                 "password": self._password,
             }
 
-            async with self._session.post(url, data=data, headers=headers) as response:
+            async with self._session.post(url, data=data, headers=headers, timeout=REQUEST_TIMEOUT) as response:
                 if response.status == 200:
                     result = await response.json()
                     self._access_token = result.get("access_token")
                     self._refresh_token = result.get("refresh_token")
 
-                    # Calculate token expiration (usually 3600 seconds)
                     expires_in = result.get("expires_in", 3600)
-                    self._token_expires_at = datetime.now() + timedelta(seconds=expires_in)
+                    self._token_expires_at = datetime.now(tz=UTC) + timedelta(seconds=expires_in)
 
                     _LOGGER.debug("Successfully authenticated with Elnur Gabarron API")
                     return True
@@ -82,9 +85,9 @@ class ElnurGabarronAPI:
                     error_text = await response.text()
                     _LOGGER.error("Authentication failed: %s - %s", response.status, error_text)
                     return False
-        except Exception as err:
+        except (aiohttp.ClientError, asyncio.TimeoutError) as err:
             _LOGGER.error("Authentication error: %s", err)
-            raise ElnurGabarronAPIError(f"Authentication failed: {err}")
+            raise ElnurGabarronAPIError(f"Authentication failed: {err}") from err
 
     async def refresh_access_token(self) -> bool:
         """Refresh the access token using the refresh token."""
@@ -111,14 +114,14 @@ class ElnurGabarronAPI:
                 "refresh_token": self._refresh_token,
             }
 
-            async with self._session.post(url, data=data, headers=headers) as response:
+            async with self._session.post(url, data=data, headers=headers, timeout=REQUEST_TIMEOUT) as response:
                 if response.status == 200:
                     result = await response.json()
                     self._access_token = result.get("access_token")
                     self._refresh_token = result.get("refresh_token")
 
                     expires_in = result.get("expires_in", 3600)
-                    self._token_expires_at = datetime.now() + timedelta(seconds=expires_in)
+                    self._token_expires_at = datetime.now(tz=UTC) + timedelta(seconds=expires_in)
 
                     _LOGGER.debug("Successfully refreshed access token")
                     return True
@@ -126,20 +129,20 @@ class ElnurGabarronAPI:
                     _LOGGER.error("Token refresh failed: %s", response.status)
                     # If refresh fails, try full authentication
                     return await self.authenticate()
-        except Exception as err:
+        except (aiohttp.ClientError, asyncio.TimeoutError) as err:
             _LOGGER.error("Token refresh error: %s", err)
             return await self.authenticate()
 
     async def _ensure_authenticated(self) -> bool:
         """Ensure we have a valid access token."""
-        if not self._access_token:
-            return await self.authenticate()
+        async with self._token_lock:
+            if not self._access_token:
+                return await self.authenticate()
 
-        # Check if token is expired or about to expire (within 5 minutes)
-        if self._token_expires_at and datetime.now() >= self._token_expires_at - timedelta(minutes=5):
-            return await self.refresh_access_token()
+            if self._token_expires_at and datetime.now(tz=UTC) >= self._token_expires_at - timedelta(minutes=5):
+                return await self.refresh_access_token()
 
-        return True
+            return True
 
     async def async_get_access_token(self) -> str:
         """Return a valid access token (refreshing/re-authing if needed)."""
@@ -155,7 +158,7 @@ class ElnurGabarronAPI:
         try:
             url = f"{API_BASE_URL}{API_DEVICES_ENDPOINT}"
 
-            async with self._session.get(url, headers=self._get_headers()) as response:
+            async with self._session.get(url, headers=self._get_headers(), timeout=REQUEST_TIMEOUT) as response:
                 if response.status == 200:
                     groups = await response.json()
                     _LOGGER.debug(
@@ -195,9 +198,9 @@ class ElnurGabarronAPI:
                     error_text = await response.text()
                     _LOGGER.error("Failed to get devices: %s - %s", response.status, error_text)
                     return []
-        except Exception as err:
+        except (aiohttp.ClientError, asyncio.TimeoutError) as err:
             _LOGGER.error("Error getting devices: %s", err)
-            raise ElnurGabarronAPIError(f"Failed to get devices: {err}")
+            raise ElnurGabarronAPIError(f"Failed to get devices: {err}") from err
 
     async def get_device_status(self, device_id: str, zone_id: int = 3) -> dict[str, Any]:
         """Get status of a specific device zone."""
@@ -206,7 +209,7 @@ class ElnurGabarronAPI:
         try:
             url = f"{API_BASE_URL}{API_DEVICE_CONTROL_ENDPOINT.format(device_id=device_id, zone_id=zone_id)}"
 
-            async with self._session.get(url, headers=self._get_headers()) as response:
+            async with self._session.get(url, headers=self._get_headers(), timeout=REQUEST_TIMEOUT) as response:
                 if response.status == 200:
                     return await response.json()
                 else:
@@ -217,9 +220,9 @@ class ElnurGabarronAPI:
                         error_text,
                     )
                     return {}
-        except Exception as err:
+        except (aiohttp.ClientError, asyncio.TimeoutError) as err:
             _LOGGER.error("Error getting device status: %s", err)
-            raise ElnurGabarronAPIError(f"Failed to get device status: {err}")
+            raise ElnurGabarronAPIError(f"Failed to get device status: {err}") from err
 
     async def set_temperature(
         self,
@@ -250,10 +253,12 @@ class ElnurGabarronAPI:
             if mode:
                 data["mode"] = mode
 
-            async with self._session.post(url, json=data, headers=self._get_headers()) as response:
+            async with self._session.post(
+                url, json=data, headers=self._get_headers(), timeout=REQUEST_TIMEOUT
+            ) as response:
                 if response.status in [200, 201, 204]:
                     mode_msg = f" with mode '{mode}'" if mode else ""
-                    _LOGGER.info(
+                    _LOGGER.debug(
                         "Set temperature to %s°C%s for device %s zone %s",
                         temperature,
                         mode_msg,
@@ -269,9 +274,9 @@ class ElnurGabarronAPI:
                         error_text,
                     )
                     return False
-        except Exception as err:
+        except (aiohttp.ClientError, asyncio.TimeoutError) as err:
             _LOGGER.error("Error setting temperature: %s", err)
-            raise ElnurGabarronAPIError(f"Failed to set temperature: {err}")
+            raise ElnurGabarronAPIError(f"Failed to set temperature: {err}") from err
 
     async def set_mode(self, device_id: str, mode: str, zone_id: int = 3) -> bool:
         """Set device zone mode.
@@ -291,9 +296,11 @@ class ElnurGabarronAPI:
                 "mode": mode,
             }
 
-            async with self._session.post(url, json=data, headers=self._get_headers()) as response:
+            async with self._session.post(
+                url, json=data, headers=self._get_headers(), timeout=REQUEST_TIMEOUT
+            ) as response:
                 if response.status in [200, 201, 204]:
-                    _LOGGER.info(
+                    _LOGGER.debug(
                         "Set mode to '%s' for device %s zone %s",
                         mode,
                         device_id,
@@ -304,9 +311,9 @@ class ElnurGabarronAPI:
                     error_text = await response.text()
                     _LOGGER.error("Failed to set mode: %s - %s", response.status, error_text)
                     return False
-        except Exception as err:
+        except (aiohttp.ClientError, asyncio.TimeoutError) as err:
             _LOGGER.error("Error setting mode: %s", err)
-            raise ElnurGabarronAPIError(f"Failed to set mode: {err}")
+            raise ElnurGabarronAPIError(f"Failed to set mode: {err}") from err
 
     async def set_control(self, device_id: str, control_data: dict[str, Any], zone_id: int = 3) -> bool:
         """Send control command to a device zone with custom data."""
@@ -315,9 +322,11 @@ class ElnurGabarronAPI:
         try:
             url = f"{API_BASE_URL}{API_DEVICE_CONTROL_ENDPOINT.format(device_id=device_id, zone_id=zone_id)}"
 
-            async with self._session.post(url, json=control_data, headers=self._get_headers()) as response:
+            async with self._session.post(
+                url, json=control_data, headers=self._get_headers(), timeout=REQUEST_TIMEOUT
+            ) as response:
                 if response.status in [200, 201, 204]:
-                    _LOGGER.info(
+                    _LOGGER.debug(
                         "Sent control command to device %s zone %s: %s",
                         device_id,
                         zone_id,
@@ -332,9 +341,9 @@ class ElnurGabarronAPI:
                         error_text,
                     )
                     return False
-        except Exception as err:
+        except (aiohttp.ClientError, asyncio.TimeoutError) as err:
             _LOGGER.error("Error sending control command: %s", err)
-            raise ElnurGabarronAPIError(f"Failed to send control command: {err}")
+            raise ElnurGabarronAPIError(f"Failed to send control command: {err}") from err
 
     def _get_headers(self) -> dict[str, str]:
         """Return headers for API requests."""
