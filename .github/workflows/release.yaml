@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version to release (e.g. v0.1.0)"
+        description: "Version to release (e.g. 0.1.0)"
         required: true
 
 permissions:
@@ -20,9 +20,7 @@ jobs:
 
       - name: Update version in manifest.json
         run: |
-          VERSION="${{ github.event.inputs.version }}"
-          VERSION="${VERSION#v}"
-          jq --arg v "$VERSION" '.version = $v' \
+          jq --arg v "${{ github.event.inputs.version }}" '.version = $v' \
             custom_components/elnur_gabarron/manifest.json > tmp.json \
             && mv tmp.json custom_components/elnur_gabarron/manifest.json
 
