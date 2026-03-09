@@ -107,6 +107,11 @@ class ElnurSocketIOCoordinator(DataUpdateCoordinator):
                 pass
         self._connected = False
 
+    def _is_heater_zone(self, node: dict) -> bool:
+        """Return True if the zone looks like a heater (has accumulator or emitter power)."""
+        factory_opts = node.get("setup", {}).get("factory_options", {})
+        return bool(factory_opts.get("accumulator_power") or factory_opts.get("emitter_power"))
+
     async def _fetch_initial_data(self) -> dict[str, Any]:
         """Fetch initial device data via Socket.IO dev_data (synchronously)."""
         try:
@@ -175,6 +180,17 @@ class ElnurSocketIOCoordinator(DataUpdateCoordinator):
 
                                         # Build device data from nodes
                                         for node in nodes:
+                                            if not self._is_heater_zone(node):
+                                                _LOGGER.warning(
+                                                    "Skipping zone %s ('%s') on device %s "
+                                                    "— no heater factory_options found. "
+                                                    "This device type is not supported yet.",
+                                                    node.get("addr"),
+                                                    node.get("name", "unknown"),
+                                                    self._device_id,
+                                                )
+                                                continue
+
                                             zone_id = node.get("addr")
                                             zone_name = node.get("name", f"Zone {zone_id}")
 
@@ -489,6 +505,17 @@ class ElnurSocketIOCoordinator(DataUpdateCoordinator):
 
             # Update coordinator data with full zone info
             for node in nodes:
+                if not self._is_heater_zone(node):
+                    _LOGGER.warning(
+                        "Skipping zone %s ('%s') on device %s "
+                        "— no heater factory_options found. "
+                        "This device type is not supported yet.",
+                        node.get("addr"),
+                        node.get("name", "unknown"),
+                        self._device_id,
+                    )
+                    continue
+
                 addr = node.get("addr")
                 if addr and self._device_id:
                     unique_key = f"{self._device_id}_zone{addr}"
