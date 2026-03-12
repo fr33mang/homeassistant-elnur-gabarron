@@ -1,5 +1,3 @@
-"""API Client for Elnur Gabarron heaters."""
-
 import asyncio
 import base64
 import logging
@@ -36,7 +34,6 @@ class ElnurGabarronAPI:
         password: str,
         serial_id: str = "7",
     ):
-        """Initialize the API client."""
         self._session = session
         self._username = username
         self._password = password
@@ -134,7 +131,6 @@ class ElnurGabarronAPI:
             return await self.authenticate()
 
     async def _ensure_authenticated(self) -> bool:
-        """Ensure we have a valid access token."""
         async with self._token_lock:
             if not self._access_token:
                 return await self.authenticate()
@@ -145,14 +141,12 @@ class ElnurGabarronAPI:
             return True
 
     async def async_get_access_token(self) -> str:
-        """Return a valid access token (refreshing/re-authing if needed)."""
         ok = await self._ensure_authenticated()
         if not ok or not self._access_token:
             raise ElnurGabarronAPIError("No access token available")
         return self._access_token
 
     async def get_devices(self) -> list[dict[str, Any]]:
-        """Get list of all devices from grouped_devs endpoint."""
         await self._ensure_authenticated()
 
         try:
@@ -203,7 +197,6 @@ class ElnurGabarronAPI:
             raise ElnurGabarronAPIError(f"Failed to get devices: {err}") from err
 
     async def get_device_status(self, device_id: str, zone_id: int = 3) -> dict[str, Any]:
-        """Get status of a specific device zone."""
         await self._ensure_authenticated()
 
         try:
@@ -316,7 +309,6 @@ class ElnurGabarronAPI:
             raise ElnurGabarronAPIError(f"Failed to set mode: {err}") from err
 
     async def set_control(self, device_id: str, control_data: dict[str, Any], zone_id: int = 3) -> bool:
-        """Send control command to a device zone with custom data."""
         await self._ensure_authenticated()
 
         try:
@@ -346,7 +338,6 @@ class ElnurGabarronAPI:
             raise ElnurGabarronAPIError(f"Failed to send control command: {err}") from err
 
     def _get_headers(self) -> dict[str, str]:
-        """Return headers for API requests."""
 
         headers = {
             "accept": "application/json, text/plain, */*",

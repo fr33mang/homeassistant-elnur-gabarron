@@ -1,5 +1,3 @@
-"""Climate platform for Elnur Gabarron."""
-
 import asyncio
 import logging
 from typing import Any
@@ -12,7 +10,7 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, MANUFACTURER, MODEL
+from .const import DOMAIN, build_device_info
 from .socketio_coordinator import ElnurSocketIOCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -57,7 +55,6 @@ class ElnurGabarronClimate(CoordinatorEntity, ClimateEntity):
         zone_data: dict[str, Any],
         entry: ConfigEntry,
     ) -> None:
-        """Initialize the climate entity."""
         super().__init__(coordinator)
 
         self._entry = entry
@@ -80,42 +77,16 @@ class ElnurGabarronClimate(CoordinatorEntity, ClimateEntity):
 
     @property
     def device_info(self) -> DeviceInfo:
-        """Return device information.
-
-        Each zone is a separate device in Home Assistant.
-        """
         zone_data = self.zone_data
-
-        setup = zone_data.get("setup", {})
-        factory_opts = setup.get("factory_options", {})
-        accumulator_power = factory_opts.get("accumulator_power", "")
-        emitter_power = factory_opts.get("emitter_power", "")
-
-        model_parts = [MODEL]
-        if accumulator_power:
-            model_parts.append(f"{accumulator_power}W")
-        if emitter_power:
-            model_parts.append(f"(emitter: {emitter_power}W)")
-
-        device_name = zone_data.get("device_name", "")
-        group_name = zone_data.get("group_name", "")
-
-        return DeviceInfo(
-            identifiers={(DOMAIN, f"{self._device_id}_zone{self._zone_id}")},
-            name=self.name,
-            manufacturer=MANUFACTURER,
-            model=" ".join(model_parts),
-            suggested_area=device_name or group_name,
-        )
+        zone_name = zone_data.get("name", "")
+        return build_device_info(zone_data, self._device_id, self._zone_id, zone_name)
 
     @property
     def zone_data(self) -> dict[str, Any]:
-        """Get zone data from coordinator."""
         return self.coordinator.data.get(self._zone_key, {})
 
     @property
     def current_temperature(self) -> float | None:
-        """Return the current temperature."""
         status = self.zone_data.get("status", {})
         # mtemp = measured temperature (current)
         temp_str = status.get("mtemp")
@@ -128,7 +99,6 @@ class ElnurGabarronClimate(CoordinatorEntity, ClimateEntity):
 
     @property
     def target_temperature(self) -> float | None:
-        """Return the target temperature."""
         # Return optimistic value if set (immediate UI response)
         if self._optimistic_target_temp is not None:
             return self._optimistic_target_temp
@@ -145,7 +115,6 @@ class ElnurGabarronClimate(CoordinatorEntity, ClimateEntity):
 
     @property
     def hvac_mode(self) -> HVACMode:
-        """Return current HVAC mode."""
         # Return optimistic value if set (immediate UI response)
         if self._optimistic_hvac_mode is not None:
             return self._optimistic_hvac_mode
@@ -167,7 +136,6 @@ class ElnurGabarronClimate(CoordinatorEntity, ClimateEntity):
 
     @property
     def hvac_action(self) -> HVACAction | None:
-        """Return current HVAC action (what the device is actually doing)."""
         # Return optimistic value if set (immediate UI response)
         if self._optimistic_hvac_action is not None:
             return self._optimistic_hvac_action
@@ -187,7 +155,6 @@ class ElnurGabarronClimate(CoordinatorEntity, ClimateEntity):
             return HVACAction.IDLE
 
     async def async_set_temperature(self, **kwargs: Any) -> None:
-        """Set new target temperature."""
         temperature = kwargs.get(ATTR_TEMPERATURE)
         if temperature is None:
             return
@@ -259,7 +226,6 @@ class ElnurGabarronClimate(CoordinatorEntity, ClimateEntity):
             self.async_write_ha_state()
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
-        """Set new HVAC mode."""
         _LOGGER.debug("Setting HVAC mode to %s", hvac_mode)
 
         # Optimistically update the UI immediately (mode and action)
@@ -334,5 +300,4 @@ class ElnurGabarronClimate(CoordinatorEntity, ClimateEntity):
 
     @property
     def available(self) -> bool:
-        """Return if entity is available."""
         return self.coordinator.last_update_success and self._zone_key in self.coordinator.data

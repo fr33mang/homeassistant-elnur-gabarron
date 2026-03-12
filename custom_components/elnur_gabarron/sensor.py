@@ -1,7 +1,3 @@
-"""Sensor platform for Elnur Gabarron."""
-
-from __future__ import annotations
-
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -17,14 +13,13 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import StateType
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, MANUFACTURER, MODEL
+from .const import DOMAIN, build_device_info
 from .socketio_coordinator import ElnurSocketIOCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
 
 def _int_from_status(zone_data: dict[str, Any], key: str) -> int | None:
-    """Extract an integer value from zone status."""
     val = zone_data.get("status", {}).get(key)
     if val is not None:
         try:
@@ -35,7 +30,6 @@ def _int_from_status(zone_data: dict[str, Any], key: str) -> int | None:
 
 
 def _float_from_status(zone_data: dict[str, Any], key: str) -> float | None:
-    """Extract a float value from zone status."""
     val = zone_data.get("status", {}).get(key)
     if val is not None:
         try:
@@ -46,13 +40,11 @@ def _float_from_status(zone_data: dict[str, Any], key: str) -> float | None:
 
 
 def _get_priority(zone_data: dict[str, Any]) -> str | None:
-    """Get the heating priority setting."""
     priority = zone_data.get("setup", {}).get("priority")
     return priority.capitalize() if priority else None
 
 
 def _get_firmware_version(zone_data: dict[str, Any]) -> str | None:
-    """Format firmware and hardware version info."""
     version = zone_data.get("version", {})
     fw_version = version.get("fw_version")
     hw_version = version.get("hw_version")
@@ -66,12 +58,10 @@ def _get_firmware_version(zone_data: dict[str, Any]) -> str | None:
 
 
 def _minutes_to_time(minutes: int) -> str:
-    """Convert minutes from midnight to HH:MM format."""
     return f"{minutes // 60:02d}:{minutes % 60:02d}"
 
 
 def _get_charging_slot(zone_data: dict[str, Any], slot_key: str) -> str | None:
-    """Format a charging slot time range."""
     slot = zone_data.get("setup", {}).get("charging_conf", {}).get(slot_key, {})
     start = slot.get("start", 0)
     end = slot.get("end", 0)
@@ -83,7 +73,6 @@ def _get_charging_slot(zone_data: dict[str, Any], slot_key: str) -> str | None:
 
 
 def _get_charging_days(zone_data: dict[str, Any]) -> str | None:
-    """Format active charging days."""
     active_days = zone_data.get("setup", {}).get("charging_conf", {}).get("active_days", [])
     if not active_days or len(active_days) != 7:
         return "Not configured"
@@ -232,7 +221,6 @@ class ElnurGabarronSensorBase(CoordinatorEntity, SensorEntity):
         zone_id: int,
         zone_name: str,
     ) -> None:
-        """Initialize the sensor."""
         super().__init__(coordinator)
         self._zone_key = zone_key
         self._device_id = device_id
@@ -241,46 +229,18 @@ class ElnurGabarronSensorBase(CoordinatorEntity, SensorEntity):
 
     @property
     def zone_data(self) -> dict[str, Any]:
-        """Get zone data from coordinator."""
         return self.coordinator.data.get(self._zone_key, {})
 
     @property
     def zone_name(self) -> str:
-        """Get the current zone name (dynamic from dev_data)."""
         return self.zone_data.get("name") or self._initial_zone_name
 
     @property
     def device_info(self) -> DeviceInfo:
-        """Return device information.
-
-        Each zone is a separate device - must match climate entity device_info.
-        """
-        zone_data = self.zone_data
-        setup = zone_data.get("setup", {})
-        factory_opts = setup.get("factory_options", {})
-        accumulator_power = factory_opts.get("accumulator_power", "")
-        emitter_power = factory_opts.get("emitter_power", "")
-
-        model_parts = [MODEL]
-        if accumulator_power:
-            model_parts.append(f"{accumulator_power}W")
-        if emitter_power:
-            model_parts.append(f"(emitter: {emitter_power}W)")
-
-        device_name = zone_data.get("device_name", "")
-        group_name = zone_data.get("group_name", "")
-
-        return DeviceInfo(
-            identifiers={(DOMAIN, f"{self._device_id}_zone{self._zone_id}")},
-            name=self.zone_name,
-            manufacturer=MANUFACTURER,
-            model=" ".join(model_parts),
-            suggested_area=device_name or group_name,
-        )
+        return build_device_info(self.zone_data, self._device_id, self._zone_id, self.zone_name)
 
     @property
     def available(self) -> bool:
-        """Return if entity is available."""
         return self.coordinator.last_update_success and self._zone_key in self.coordinator.data
 
 
@@ -298,12 +258,10 @@ class ElnurGabarronSensor(ElnurGabarronSensorBase):
         zone_name: str,
         description: ElnurSensorEntityDescription,
     ) -> None:
-        """Initialize the sensor from a description."""
         super().__init__(coordinator, zone_key, device_id, zone_id, zone_name)
         self.entity_description = description
         self._attr_unique_id = f"{DOMAIN}_{device_id}_{zone_id}_{description.key}"
 
     @property
     def native_value(self) -> StateType:
-        """Return the sensor value."""
         return self.entity_description.value_fn(self.zone_data)

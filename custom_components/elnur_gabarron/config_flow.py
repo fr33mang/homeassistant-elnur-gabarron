@@ -1,5 +1,3 @@
-"""Config flow for Elnur Gabarron integration."""
-
 import logging
 from typing import Any
 
