@@ -1,5 +1,3 @@
-"""Socket.IO coordinator for Elnur Gabarron real-time updates."""
-
 import asyncio
 import json
 import logging

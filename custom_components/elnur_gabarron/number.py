@@ -1,5 +1,3 @@
-"""Number platform for Elnur Gabarron."""
-
 import asyncio
 import logging
 from typing import Any
@@ -14,7 +12,7 @@ from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, MANUFACTURER, MODEL
+from .const import DOMAIN, build_device_info
 from .socketio_coordinator import ElnurSocketIOCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -65,7 +63,6 @@ class ElnurGabarronScheduleTemperatureBase(CoordinatorEntity, NumberEntity):
         zone_id: int,
         zone_name: str,
     ) -> None:
-        """Initialize the number entity."""
         super().__init__(coordinator)
         self._zone_key = zone_key
         self._device_id = device_id
@@ -84,12 +81,10 @@ class ElnurGabarronScheduleTemperatureBase(CoordinatorEntity, NumberEntity):
 
     @property
     def zone_data(self) -> dict[str, Any]:
-        """Get zone data from coordinator."""
         return self.coordinator.data.get(self._zone_key, {})
 
     @property
     def zone_name(self) -> str:
-        """Get the current zone name (dynamic from dev_data)."""
         zone_data = self.zone_data
         current_name = zone_data.get("name")
 
@@ -100,46 +95,20 @@ class ElnurGabarronScheduleTemperatureBase(CoordinatorEntity, NumberEntity):
 
     @property
     def device_info(self) -> DeviceInfo:
-        """Return device information - must match climate/sensor entities."""
-        zone_data = self.zone_data
-        setup = zone_data.get("setup", {})
-        factory_opts = setup.get("factory_options", {})
-        accumulator_power = factory_opts.get("accumulator_power", "")
-        emitter_power = factory_opts.get("emitter_power", "")
-
-        model_parts = [MODEL]
-        if accumulator_power:
-            model_parts.append(f"{accumulator_power}W")
-        if emitter_power:
-            model_parts.append(f"{emitter_power}W")
-
-        device_name = zone_data.get("device_name", "")
-        group_name = zone_data.get("group_name", "")
-
-        return DeviceInfo(
-            identifiers={(DOMAIN, self._zone_key)},
-            name=self.zone_name,
-            manufacturer=MANUFACTURER,
-            model=" ".join(model_parts),
-            suggested_area=device_name or group_name,
-        )
+        return build_device_info(self.zone_data, self._device_id, self._zone_id, self.zone_name)
 
     @property
     def available(self) -> bool:
-        """Return if entity is available."""
         return self.coordinator.last_update_success and self._zone_key in self.coordinator.data
 
     @property
     def native_value(self) -> float | None:
-        """Return the temperature setting"""
         return self._get_temp_from_status()
 
     async def async_set_native_value(self, value: float) -> None:
-        """Set new temperature for self.status_key."""
         await self._set_temp_value(value=value)
 
     def _get_temp_from_status(self) -> float | None:
-        """Extract a temperature value from zone status for self.status_key."""
         status = self.zone_data.get("status", {})
         temp = status.get(self.status_key)
         if temp is not None:
