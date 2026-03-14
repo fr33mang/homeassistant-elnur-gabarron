@@ -2,6 +2,11 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/custom-components/hacs)
+[![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue?logo=python&logoColor=white)](https://www.python.org/downloads/)
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+[![Imports: isort](https://img.shields.io/badge/%20imports-isort-%231674b1?style=flat&labelColor=ef8336)](https://pycqa.github.io/isort/)
+[![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&logoColor=white)](https://github.com/pre-commit/pre-commit)
+[![Lint](https://github.com/fr33mang/homeassistant-elnur-gabarron/workflows/Lint/badge.svg)](https://github.com/fr33mang/homeassistant-elnur-gabarron/actions/workflows/lint.yaml)
 [![Tests](https://github.com/fr33mang/homeassistant-elnur-gabarron/workflows/Tests/badge.svg)](https://github.com/fr33mang/homeassistant-elnur-gabarron/actions/workflows/test.yaml)
 [![codecov](https://codecov.io/gh/fr33mang/homeassistant-elnur-gabarron/graph/badge.svg?token=2BMLJJGA4G)](https://codecov.io/gh/fr33mang/homeassistant-elnur-gabarron)
 [![Hassfest](https://github.com/fr33mang/homeassistant-elnur-gabarron/workflows/Validate%20with%20hassfest/badge.svg)](https://github.com/fr33mang/homeassistant-elnur-gabarron/actions/workflows/hassfest.yaml)
