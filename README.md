@@ -12,7 +12,7 @@
 [![Hassfest](https://github.com/fr33mang/homeassistant-elnur-gabarron/workflows/Validate%20with%20hassfest/badge.svg)](https://github.com/fr33mang/homeassistant-elnur-gabarron/actions/workflows/hassfest.yaml)
 [![HACS Validation](https://github.com/fr33mang/homeassistant-elnur-gabarron/workflows/HACS%20Validation/badge.svg)](https://github.com/fr33mang/homeassistant-elnur-gabarron/actions/workflows/hacs.yaml)
 
-Unoficial Elnur Gabarron Heaters integration based on reverse engineered API. Control your electric heaters using real-time Socket.IO updates and the unofficial Elnur API.
+Unofficial Home Assistant integration for Elnur Gabarron electric heaters based on reverse engineered API. Control your heaters using real-time Socket.IO updates.
 
 <img width="1386" height="574" alt="image" src="https://github.com/user-attachments/assets/e01af915-97be-4995-bc74-12f40847fb1f" />
 
