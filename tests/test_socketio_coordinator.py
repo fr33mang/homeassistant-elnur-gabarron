@@ -182,3 +182,70 @@ async def test_ping_sender_disconnects_when_send_fails(coordinator):
     await coordinator._ping_sender()
 
     assert coordinator._connected is False
+
+
+# ---------------------------------------------------------------------------
+# _is_heater_zone() -- node["type"] is the discriminator the official web
+# client uses; factory_options stays as a fallback for unknown types.
+# ---------------------------------------------------------------------------
+
+
+def test_is_heater_zone_accepts_known_heater_types(coordinator):
+    for node_type in ("acm", "htr", "htr_mod"):
+        assert coordinator._is_heater_zone({"type": node_type, "setup": {}}) is True
+
+
+def test_is_heater_zone_rejects_known_non_heater_type(coordinator):
+    # A power monitor has no factory_options either, but we want it skipped by
+    # type so the "unsupported device" warning stays meaningful.
+    assert coordinator._is_heater_zone({"type": "pmo", "setup": {}}) is False
+
+
+def test_is_heater_zone_falls_back_to_factory_options_for_unknown_type(coordinator):
+    unknown_heater = {"type": "something_new", "setup": {"factory_options": {"emitter_power": "450"}}}
+    unknown_other = {"type": "something_new", "setup": {"factory_options": {}}}
+
+    assert coordinator._is_heater_zone(unknown_heater) is True
+    assert coordinator._is_heater_zone(unknown_other) is False
+
+
+def test_is_heater_zone_handles_node_without_type(coordinator):
+    # Older payloads (and the fixtures this integration was built on) have no
+    # "type" key at all -- the original heuristic must still decide.
+    assert coordinator._is_heater_zone(HEATER_NODE) is True
+    assert coordinator._is_heater_zone(NON_HEATER_NODE) is False
+
+
+# ---------------------------------------------------------------------------
+# _handle_update_event() -- the first path segment is the node type
+# ---------------------------------------------------------------------------
+
+
+async def test_handle_update_event_applies_status_for_acm_path(coordinator):
+    key = f"{DEVICE_ID}_zone2"
+    coordinator.async_set_updated_data({key: {"status": {"mode": "off"}}})
+
+    await coordinator._handle_update_event({"path": "/acm/2/status", "body": {"mode": "auto"}})
+
+    assert coordinator.data[key]["status"] == {"mode": "auto"}
+
+
+async def test_handle_update_event_applies_status_for_htr_path(coordinator):
+    # Regression guard: the old code matched the literal string "/acm/", so a
+    # direct-emitter node's updates were dropped on the floor.
+    key = f"{DEVICE_ID}_zone2"
+    coordinator.async_set_updated_data({key: {"status": {"mode": "off"}}})
+
+    await coordinator._handle_update_event({"path": "/htr/2/status", "body": {"mode": "auto"}})
+
+    assert coordinator.data[key]["status"] == {"mode": "auto"}
+
+
+async def test_handle_update_event_ignores_non_node_paths(coordinator):
+    key = f"{DEVICE_ID}_zone2"
+    coordinator.async_set_updated_data({key: {"status": {"mode": "off"}}})
+
+    await coordinator._handle_update_event({"path": "/connected", "body": True})
+    await coordinator._handle_update_event({"path": "/pmo/1/status", "body": {"power": 10}})
+
+    assert coordinator.data[key]["status"] == {"mode": "off"}
