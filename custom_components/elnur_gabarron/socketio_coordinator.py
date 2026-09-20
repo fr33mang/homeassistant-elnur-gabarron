@@ -486,16 +486,23 @@ class ElnurSocketIOCoordinator(DataUpdateCoordinator):
         if self._device_id:
             params["dev_id"] = self._device_id
         url = f"{SOCKETIO_BASE_URL}{SOCKETIO_PATH}?{urlencode(params)}&t={time.time_ns()}"
-        await self.session.post(url, data="2")
+        # Polling packets are length-prefixed ("<len>:<packet>"), same as the
+        # namespace-join/dev_data packets sent elsewhere in this file.
+        await self.session.post(url, data="1:2")
 
     async def _ping_sender(self) -> None:
         """Send client-initiated Engine.IO pings and disconnect on a missed pong.
 
         EIO=3 (used here) has the CLIENT send "2" every pingInterval and expect
         a "3" back within pingTimeout — the opposite direction from EIO=4. The
-        server never pings us; if we don't ping it, it silently drops the
-        session once pingInterval + pingTimeout has elapsed since connecting,
-        which is exactly what a 500/close every ~85s without this task was.
+        server resets its own idle-timeout on every packet it gets from us, so
+        pings must go out every pingInterval regardless of whether the previous
+        one was acked yet. Waiting for a pong before scheduling the next ping
+        (an earlier version of this did `sleep(interval); ping; sleep(timeout)`)
+        pushes the real cadence out to pingInterval + pingTimeout — which is
+        exactly the server's own deadline, so it's a coin flip whether our next
+        ping lands before the server gives up (observed in practice: a real
+        connection dropped at t=110s = interval + timeout + interval).
         Runs as its own task so its schedule doesn't depend on whichever read
         loop (WS or polling) happens to be active.
         """
@@ -505,7 +512,6 @@ class ElnurSocketIOCoordinator(DataUpdateCoordinator):
                 if not self._connected:
                     break
 
-                sent_at = time.monotonic()
                 try:
                     await self._send_ping()
                 except Exception as err:
@@ -513,11 +519,14 @@ class ElnurSocketIOCoordinator(DataUpdateCoordinator):
                     self._connected = False
                     break
 
-                await asyncio.sleep(self._ping_timeout)
-                if self._last_pong_time < sent_at:
+                # Tolerate a missed pong or two (server hiccup, jitter) rather
+                # than reconnecting on the first one; only give up once we're
+                # as stale as the server's own pingInterval + pingTimeout budget.
+                stale_for = time.monotonic() - self._last_pong_time
+                if stale_for > self._ping_interval + self._ping_timeout:
                     _LOGGER.warning(
-                        "No pong received within %ss of ping, reconnecting...",
-                        self._ping_timeout,
+                        "No pong received in %ss, reconnecting...",
+                        int(stale_for),
                     )
                     self._connected = False
                     break
@@ -552,15 +561,10 @@ class ElnurSocketIOCoordinator(DataUpdateCoordinator):
                 poll_count += 1
                 current_time = time.monotonic()
 
-                # Watchdog: Check for stale connection (no real updates in 5 minutes)
-                time_since_update = current_time - self._last_update_time
-                if time_since_update > 300:  # 5 minutes
-                    _LOGGER.warning(
-                        "No updates received for %ss, forcing reconnect...",
-                        int(time_since_update),
-                    )
-                    self._connected = False
-                    break
+                # No "quiet for N minutes" watchdog on _last_update_time here:
+                # a pong (or any other activity, tracked below via
+                # last_activity) is proof the connection is alive on its own,
+                # regardless of whether the heaters have anything to report.
 
                 # Check for idle session (no activity within the server's own timeout budget)
                 elapsed = current_time - last_activity
@@ -605,7 +609,7 @@ class ElnurSocketIOCoordinator(DataUpdateCoordinator):
                             # server, so this shouldn't normally happen. Reply anyway
                             # in case the server ever does send one.
                             if msg == "2":
-                                await self.session.post(f"{base_url}&t={time.time_ns()}", data="3")  # Send PONG
+                                await self.session.post(f"{base_url}&t={time.time_ns()}", data="1:3")  # Send PONG
                                 _LOGGER.debug("Received PING, sent PONG")
                                 continue
 
@@ -701,16 +705,19 @@ class ElnurSocketIOCoordinator(DataUpdateCoordinator):
                     self._consecutive_connection_failures = 0
                     await self._handle_socketio_event(data)
 
-                # Watchdog: Check for stale connection (no real updates in 5 minutes)
-                time_since_update = current_time - self._last_update_time
-                if time_since_update > 300:  # 5 minutes
-                    _LOGGER.warning(
-                        "No updates received for %ss, forcing reconnect...",
-                        int(time_since_update),
-                    )
-                    self._connected = False
-                    break
+                # No "quiet for N minutes" watchdog here: a pong is proof the
+                # connection is alive on its own, regardless of whether the
+                # heaters happen to have anything to report. _ping_sender
+                # already reconnects us if pongs stop arriving; gating on
+                # _last_update_time as well used to force a reconnect on any
+                # house that's simply quiet for 5+ minutes.
         finally:
+            # Stop pinging before dropping the socket reference: _ping_sender
+            # checks `self._ws is not None` to decide which transport to ping
+            # on, and could otherwise fire one last ping at a POST-based
+            # fallback for a sid that's about to be replaced.
+            if self._ping_task is not None:
+                self._ping_task.cancel()
             if not ws.closed:
                 await ws.close()
             self._ws = None

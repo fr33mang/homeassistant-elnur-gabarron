@@ -115,20 +115,24 @@ def test_parse_dev_data_message_empty_nodes_returns_empty_dict(coordinator):
 # ---------------------------------------------------------------------------
 
 
-async def test_ping_sender_sends_ping_and_survives_on_pong(coordinator):
+async def test_ping_sender_paces_pings_by_interval_not_interval_plus_timeout(coordinator):
+    # Regression test: an earlier version scheduled the next ping only after
+    # sleeping ping_timeout on top of ping_interval, so with timeout >>
+    # interval the real cadence was ~ping_interval + ping_timeout instead of
+    # ping_interval. Using a timeout much bigger than the interval here means
+    # the buggy version would send at most one ping in this whole window.
     coordinator._connected = True
-    coordinator._ping_interval = 0.01
-    coordinator._ping_timeout = 0.01
+    coordinator._ping_interval = 0.02
+    coordinator._ping_timeout = 1.0
     coordinator._ws = AsyncMock()
 
     async def fake_send_str(data):
-        # Simulate the read loop observing the reply pong immediately.
         coordinator._last_pong_time = time.monotonic()
 
     coordinator._ws.send_str.side_effect = fake_send_str
 
     task = asyncio.create_task(coordinator._ping_sender())
-    await asyncio.sleep(0.05)
+    await asyncio.sleep(0.09)  # should fit ~4 pings at a 0.02s cadence
     coordinator._connected = False
     task.cancel()
     try:
@@ -136,7 +140,8 @@ async def test_ping_sender_sends_ping_and_survives_on_pong(coordinator):
     except asyncio.CancelledError:
         pass
 
-    coordinator._ws.send_str.assert_any_call("2")
+    ping_calls = [c for c in coordinator._ws.send_str.call_args_list if c.args == ("2",)]
+    assert len(ping_calls) >= 3
 
 
 async def test_ping_sender_disconnects_on_missed_pong(coordinator):
