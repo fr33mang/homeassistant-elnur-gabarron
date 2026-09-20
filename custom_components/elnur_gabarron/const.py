@@ -1,7 +1,11 @@
+import logging
+from collections.abc import Iterator
 from typing import Any
 
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.device_registry import DeviceInfo
+
+_LOGGER = logging.getLogger(__name__)
 
 DOMAIN = "elnur_gabarron"
 
@@ -29,30 +33,53 @@ MANUFACTURER = "Elnur Gabarron"
 MODEL = "Electric Heater"
 
 
-def resolve_zone_identity(zone_key: str, zone_data: dict[str, Any]) -> tuple[str, int]:
-    """Return the (device_id, zone_id) an entity for this zone must register under.
+def iter_resolvable_zones(
+    zones: dict[str, dict[str, Any]],
+) -> Iterator[tuple[str, dict[str, Any], str, int]]:
+    """Yield (zone_key, zone_data, device_id, zone_id) for each usable zone.
 
-    The coordinator writes both into every zone it builds, so they are read
-    rather than recovered by taking the zone key apart. Deriving them from the
-    key was fragile in two ways: it broke on a device id containing "_zone",
-    and its fallback branch quietly used the whole key as the device id.
+    The coordinator writes device_id and zone_id into every zone it builds, so
+    both are read rather than recovered by taking the zone key apart. Deriving
+    them from the key was fragile in two ways: it broke on a device id
+    containing "_zone", and its fallback branch quietly used the whole key as
+    the device id. Both failures land in `unique_id`, which Home Assistant
+    persists to the entity registry, so a moment of malformed data leaves
+    orphaned entities behind that outlive it.
 
-    Both failures land in `unique_id`, which Home Assistant persists to the
-    entity registry — so a moment of malformed data leaves behind orphaned
-    entities that outlive it and have to be cleaned up by hand. Raising
-    ConfigEntryNotReady instead is cheap: HA retries the setup with backoff,
-    and a single bad dev_data frame costs nothing but a delay.
+    A zone that can't be resolved is skipped with a warning rather than taken
+    as fatal: zone_id comes from a single node's `addr`, so one malformed node
+    would otherwise cost the user every healthy zone on the device, forever, if
+    the device keeps sending it. device_id is the same value for every zone, so
+    if that is what's missing nothing resolves at all — which is the one case
+    that raises, letting Home Assistant retry setup with backoff.
+
+    The raise happens on exhaustion, so a caller that breaks out of the loop
+    early won't see it. Every platform consumes this fully.
     """
-    device_id = zone_data.get("device_id")
-    zone_id = zone_data.get("zone_id")
+    resolved = 0
 
-    if not device_id or zone_id is None:
+    for zone_key, zone_data in zones.items():
+        device_id = zone_data.get("device_id")
+        zone_id = zone_data.get("zone_id")
+
+        if not device_id or zone_id is None:
+            _LOGGER.warning(
+                "Skipping zone %r: device_id=%r zone_id=%r — refusing to register entities "
+                "under an identifier that would be wrong",
+                zone_key,
+                device_id,
+                zone_id,
+            )
+            continue
+
+        resolved += 1
+        yield zone_key, zone_data, device_id, zone_id
+
+    if zones and not resolved:
         raise ConfigEntryNotReady(
-            f"Zone {zone_key!r} is missing device_id/zone_id; refusing to register "
-            "entities under an identifier that would be wrong"
+            f"None of the {len(zones)} zone(s) reported by the coordinator could be "
+            "resolved to a device_id and zone_id"
         )
-
-    return device_id, zone_id
 
 
 def build_device_info(

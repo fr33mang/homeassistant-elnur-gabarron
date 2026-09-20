@@ -248,6 +248,17 @@ class ElnurSocketIOCoordinator(DataUpdateCoordinator):
                 continue
 
             zone_id = node.get("addr")
+            if zone_id is None:
+                # _handle_dev_data_event already ignores these; without the same
+                # guard here a node with no addr becomes a "<dev>_zoneNone" zone
+                # at startup and is silently dropped on every later update.
+                _LOGGER.warning(
+                    "Skipping node '%s' on device %s — no addr, so it cannot be addressed as a zone",
+                    node.get("name", "unknown"),
+                    self._device_id,
+                )
+                continue
+
             zone_name = node.get("name", f"Zone {zone_id}")
             unique_key = f"{self._device_id}_zone{zone_id}"
             device_data[unique_key] = {

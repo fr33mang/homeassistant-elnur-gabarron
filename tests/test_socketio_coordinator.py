@@ -287,3 +287,19 @@ def test_log_skipped_node_warns_with_type_for_unknown_node(coordinator, caplog):
     assert len(caplog.records) == 1
     # The type is the only thing that makes such a report actionable for us.
     assert "who_knows" in caplog.records[0].getMessage()
+
+
+def test_parse_dev_data_message_skips_a_heater_node_without_addr(coordinator):
+    # _is_heater_zone decides on type/factory_options and never looks at addr,
+    # so a heater-shaped node with no addr used to become a "<dev>_zoneNone"
+    # zone at startup -- while _handle_dev_data_event ignored the same node on
+    # every later update. The two paths now agree.
+    addrless = {**HEATER_NODE}
+    del addrless["addr"]
+    payload = {"nodes": [HEATER_NODE, addrless]}
+    msg = f'42/api/v2/socket_io,["dev_data",{json.dumps(payload)}]'
+
+    result = coordinator._parse_dev_data_message(msg)
+
+    assert set(result) == {f"{DEVICE_ID}_zone2"}
+    assert not any("None" in key for key in result)

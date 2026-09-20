@@ -50,25 +50,57 @@ def test_suggested_area_prefers_device_name_then_group_name():
     assert build_device_info({}, DEVICE_ID, 2, "A")["suggested_area"] == ""
 
 
-def test_resolve_zone_identity_reads_the_payload():
-    from custom_components.elnur_gabarron.const import resolve_zone_identity
+def test_iter_resolvable_zones_reads_the_payload():
+    from custom_components.elnur_gabarron.const import iter_resolvable_zones
 
     # The zone key deliberately disagrees with the payload: the payload wins.
-    assert resolve_zone_identity("whatever_zone9", ZONE_OFF) == (DEVICE_ID, ZONE_ID)
+    zones = {"whatever_zone9": ZONE_OFF}
+
+    assert list(iter_resolvable_zones(zones)) == [("whatever_zone9", ZONE_OFF, DEVICE_ID, ZONE_ID)]
 
 
-def test_resolve_zone_identity_accepts_zone_zero():
-    from custom_components.elnur_gabarron.const import resolve_zone_identity
+def test_iter_resolvable_zones_accepts_zone_zero():
+    from custom_components.elnur_gabarron.const import iter_resolvable_zones
 
     # zone_id 0 is falsy but valid; only a missing value is an error.
-    assert resolve_zone_identity("k", {"device_id": DEVICE_ID, "zone_id": 0}) == (DEVICE_ID, 0)
+    zones = {"k": {"device_id": DEVICE_ID, "zone_id": 0}}
+
+    assert [z[3] for z in iter_resolvable_zones(zones)] == [0]
 
 
-def test_resolve_zone_identity_raises_on_incomplete_data():
+def test_iter_resolvable_zones_skips_one_bad_zone_and_keeps_the_rest():
+    from custom_components.elnur_gabarron.const import iter_resolvable_zones
+
+    # zone_id comes from a single node's addr, so one malformed node must not
+    # cost the user every healthy zone on the device.
+    zones = {
+        "d_zone2": {"device_id": DEVICE_ID, "zone_id": 2},
+        "d_zoneNone": {"device_id": DEVICE_ID, "zone_id": None},
+        "d_zone4": {"device_id": DEVICE_ID, "zone_id": 4},
+    }
+
+    assert [z[0] for z in iter_resolvable_zones(zones)] == ["d_zone2", "d_zone4"]
+
+
+def test_iter_resolvable_zones_raises_only_when_nothing_resolves():
     from homeassistant.exceptions import ConfigEntryNotReady
 
-    from custom_components.elnur_gabarron.const import resolve_zone_identity
+    from custom_components.elnur_gabarron.const import iter_resolvable_zones
 
-    for broken in ({}, {"device_id": DEVICE_ID}, {"zone_id": 2}, {"device_id": "", "zone_id": 2}):
-        with pytest.raises(ConfigEntryNotReady):
-            resolve_zone_identity("zone-key", broken)
+    # device_id is the same value for every zone, so if that is what's missing
+    # nothing resolves -- the one case worth failing setup over.
+    zones = {
+        "a": {"zone_id": 2},
+        "b": {"device_id": "", "zone_id": 3},
+    }
+
+    with pytest.raises(ConfigEntryNotReady):
+        list(iter_resolvable_zones(zones))
+
+
+def test_iter_resolvable_zones_accepts_an_empty_coordinator():
+    from custom_components.elnur_gabarron.const import iter_resolvable_zones
+
+    # A device with no supported zones is a legitimate state, not a reason to
+    # retry setup forever.
+    assert list(iter_resolvable_zones({})) == []
