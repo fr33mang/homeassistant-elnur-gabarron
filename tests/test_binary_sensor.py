@@ -104,7 +104,23 @@ def test_is_on_does_not_coerce_the_payload_value():
     # change is visible rather than silent.
     zone = {**ZONE_OFF, "status": {**ZONE_OFF["status"], "heating": 1}}
 
-    value = build_binary_sensor(zone, "heating").is_on
+    # Asserted loosely on purpose: when is_on starts coercing to bool, this
+    # should keep passing rather than reading as a regression from the fix.
+    assert build_binary_sensor(zone, "heating").is_on == 1
 
-    assert value == 1
-    assert value is not True
+
+def test_follows_zone_rename():
+    # zone_name is duplicated character for character across the two platform
+    # base classes, so it needs asserting on both -- a fix applied to one copy
+    # would otherwise sail past the suite.
+    sensor = build_binary_sensor(ZONE_OFF, "heating")
+    sensor.coordinator.data = {ZONE_KEY: {**ZONE_OFF, "name": "Renamed"}}
+
+    assert sensor.zone_name == "Renamed"
+
+
+def test_falls_back_to_initial_name_when_payload_has_none():
+    sensor = build_binary_sensor(ZONE_OFF, "heating")
+    sensor.coordinator.data = {ZONE_KEY: {**ZONE_OFF, "name": ""}}
+
+    assert sensor.zone_name == ZONE_OFF["name"]
