@@ -138,6 +138,8 @@ Only the actual radiator zones appear as devices—no empty hub devices are crea
 ### No real-time updates
 - Check Socket.IO connection in logs
 - Verify no firewall blocking `api-elnur.helki.com` (including `wss://` for the WebSocket transport)
+- Protocol-level details (ping direction and timing, packet framing, upgrade
+  sequence) are documented in [`docs/socketio-protocol.md`](docs/socketio-protocol.md)
 - Occasional reconnection messages are normal; frequent ones (repeating faster than a few minutes apart) usually mean something's wrong — check for errors right before the reconnect
 
 ## Support
