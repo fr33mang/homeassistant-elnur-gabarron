@@ -20,7 +20,7 @@ Unofficial Home Assistant integration for Elnur Gabarron electric heaters based 
 ## Features
 
 - **Supports only heaters** - I don't have other devices to test and implement support for them
-- **Real-time updates** - Instant synchronization via Socket.IO
+- **Real-time updates** - Instant synchronization via Socket.IO, upgraded to WebSocket transport when the server allows it (falls back to HTTP long-polling otherwise)
 - **Automatic device discovery** - Each radiator zone appears as a separate device
 - **Temperature control** - Set target temperature and view current temperature
 - **Multiple temperature presets** - Configure Eco, Comfort, and Anti-frost temperatures
@@ -115,7 +115,7 @@ Only the actual radiator zones appear as devices—no empty hub devices are crea
 1. Authenticate via REST API
 2. Discover devices and zones (including home/group name)
 3. Update integration title to match your home name
-4. Connect to Socket.IO server
+4. Connect to Socket.IO server (HTTP long-polling handshake, then upgrade to WebSocket)
 5. Request initial device data (`dev_data`)
 6. Create zone devices with proper names from Socket.IO
 7. Start real-time listener
@@ -125,6 +125,7 @@ Only the actual radiator zones appear as devices—no empty hub devices are crea
 - Status changes appear in HA immediately
 - Changes in Elnur app sync to HA in real-time
 - Changes in HA sync to Elnur app immediately
+- The connection upgrades from HTTP polling to WebSocket right after the handshake (mirroring the official web app), and falls back to polling if the server doesn't offer an upgrade
 
 ## Troubleshooting
 
@@ -136,8 +137,10 @@ Only the actual radiator zones appear as devices—no empty hub devices are crea
 
 ### No real-time updates
 - Check Socket.IO connection in logs
-- Verify no firewall blocking `api-elnur.helki.com`
-- Look for reconnection messages (normal every ~40s)
+- Verify no firewall blocking `api-elnur.helki.com` (including `wss://` for the WebSocket transport)
+- Protocol-level details (ping direction and timing, packet framing, upgrade
+  sequence) are documented in [`docs/socketio-protocol.md`](docs/socketio-protocol.md)
+- Occasional reconnection messages are normal; frequent ones (repeating faster than a few minutes apart) usually mean something's wrong — check for errors right before the reconnect
 
 ## Support
 
@@ -148,7 +151,8 @@ Only the actual radiator zones appear as devices—no empty hub devices are crea
 ## Notes
 
 - Integration automatically manages OAuth2 tokens
-- Socket.IO sessions expire by design (~40s), auto-reconnection is normal
+- Socket.IO sessions run over WebSocket when the server supports it, falling back to HTTP long-polling otherwise
+- Engine.IO pings are client-initiated on this server (`EIO=3`): the integration sends a ping every `pingInterval` and expects a pong within `pingTimeout`, keeping the session alive indefinitely; auto-reconnection only kicks in on an actual disconnect
 - All credentials stored securely in Home Assistant config
 - Integration title and zone names update automatically from Elnur API/app
 - Multiple zones per device hub are fully supported
