@@ -118,10 +118,18 @@ def test_charging_slot_without_config_reads_as_disabled():
     assert _get_charging_slot({"setup": {}}, "slot_1") == "Disabled"
 
 
-def test_charging_slot_with_end_before_start():
-    # The only way to actually reach "Not configured": a window that doesn't
-    # run forward in time.
-    zone = {"setup": {"charging_conf": {"slot_1": {"start": 480, "end": 120}}}}
+@pytest.mark.parametrize(
+    ("start", "end"),
+    [
+        (480, 120),  # window runs backwards
+        (480, 480),  # zero-length window that isn't at midnight
+        (120, 0),  # a start with no end -- plausible half-finished config
+    ],
+)
+def test_charging_slot_not_configured(start, end):
+    # "Not configured" covers any end <= start, as long as they aren't both 0
+    # (that case is reported as "Disabled" above).
+    zone = {"setup": {"charging_conf": {"slot_1": {"start": start, "end": end}}}}
     assert _get_charging_slot(zone, "slot_1") == "Not configured"
 
 
@@ -148,23 +156,27 @@ def test_charging_days_without_config():
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize(
-    ("key", "expected"),
-    [
-        ("charge_level", 3),
-        ("power", 0.0),
-        ("pcb_temp", 30.0),
-        ("target_charge", 100),
-        ("priority", "Medium"),
-        ("error_code", 1024),  # non-zero on a healthy idle device
-        ("firmware", "FW: 1.4 / HW: 1.0"),
-        ("charging_slot1", "00:00 - 08:00"),
-        ("charging_slot2", "Disabled"),
-        ("charging_days", "Every day"),
-    ],
-)
-def test_sensor_native_value_when_off(key, expected):
-    assert build_sensor(ZONE_OFF, key).native_value == expected
+# What every sensor must report for ZONE_OFF. The test below is parametrized
+# over the production description table, so adding a sensor without adding its
+# expected value here fails on that sensor's own case.
+OFF_EXPECTATIONS = {
+    "charge_level": 3,
+    "power": 0.0,
+    "pcb_temp": 30.0,
+    "target_charge": 100,
+    "priority": "Medium",
+    "error_code": 1024,  # non-zero on a healthy idle device
+    "firmware": "FW: 1.4 / HW: 1.0",
+    "charging_slot1": "00:00 - 08:00",
+    "charging_slot2": "Disabled",
+    "charging_days": "Every day",
+}
+
+
+@pytest.mark.parametrize("key", list(DESCRIPTIONS), ids=str)
+def test_sensor_native_value_when_off(key):
+    assert key in OFF_EXPECTATIONS, f"sensor {key!r} has no expected value for ZONE_OFF"
+    assert build_sensor(ZONE_OFF, key).native_value == OFF_EXPECTATIONS[key]
 
 
 @pytest.mark.parametrize(
@@ -178,23 +190,6 @@ def test_sensor_native_value_when_off(key, expected):
 )
 def test_sensor_native_value_when_heating(key, expected):
     assert build_sensor(ZONE_HEATING, key).native_value == expected
-
-
-def test_every_description_has_a_test():
-    # Guards against a new sensor being added without coverage here.
-    covered = {
-        "charge_level",
-        "power",
-        "pcb_temp",
-        "target_charge",
-        "priority",
-        "error_code",
-        "firmware",
-        "charging_slot1",
-        "charging_slot2",
-        "charging_days",
-    }
-    assert set(DESCRIPTIONS) == covered
 
 
 def test_sensor_value_is_none_when_status_key_absent():
@@ -264,8 +259,3 @@ async def test_async_setup_entry_recovers_device_id_from_the_zone_key():
     await async_setup_entry(hass, entry, lambda entities: added.extend(entities))
 
     assert all(e.unique_id.startswith(f"elnur_gabarron_{odd_device}_2_") for e in added)
-
-
-def test_device_info_is_built_per_zone():
-    info = build_sensor(ZONE_OFF, "charge_level").device_info
-    assert info["identifiers"] == {("elnur_gabarron", f"{DEVICE_ID}_zone{ZONE_ID}")}

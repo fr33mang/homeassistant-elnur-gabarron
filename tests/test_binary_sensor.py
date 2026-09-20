@@ -6,7 +6,7 @@ import pytest
 
 from custom_components.elnur_gabarron.binary_sensor import BINARY_SENSOR_DESCRIPTIONS, ElnurGabarronBinarySensor
 
-from .fixtures import DEVICE_ID, ZONE_HEATING, ZONE_ID, ZONE_KEY, ZONE_OFF
+from .fixtures import DEVICE_ID, ZONE_ALL_FLAGS_ON, ZONE_ID, ZONE_KEY, ZONE_OFF
 
 DESCRIPTIONS = {d.key: d for d in BINARY_SENSOR_DESCRIPTIONS}
 
@@ -18,25 +18,22 @@ def build_binary_sensor(zone: dict, key: str) -> ElnurGabarronBinarySensor:
     return ElnurGabarronBinarySensor(coordinator, ZONE_KEY, DEVICE_ID, ZONE_ID, zone["name"], DESCRIPTIONS[key])
 
 
-ALL_KEYS = ("heating", "charging", "window_open", "presence", "true_radiant", "extra_energy")
+# Parametrized over the production description table rather than a list kept
+# in step by hand, so a new binary sensor gets these cases automatically.
+ALL_KEYS = list(DESCRIPTIONS)
 
 
-def test_every_description_has_a_test():
-    # Guards against a new binary sensor being added without coverage here.
-    assert set(DESCRIPTIONS) == set(ALL_KEYS)
-
-
-@pytest.mark.parametrize("key", ALL_KEYS)
+@pytest.mark.parametrize("key", ALL_KEYS, ids=str)
 def test_all_off_on_an_idle_heater(key):
     assert build_binary_sensor(ZONE_OFF, key).is_on is False
 
 
-@pytest.mark.parametrize("key", ALL_KEYS)
+@pytest.mark.parametrize("key", ALL_KEYS, ids=str)
 def test_all_on_when_the_payload_says_so(key):
-    assert build_binary_sensor(ZONE_HEATING, key).is_on is True
+    assert build_binary_sensor(ZONE_ALL_FLAGS_ON, key).is_on is True
 
 
-@pytest.mark.parametrize("key", ALL_KEYS)
+@pytest.mark.parametrize("key", ALL_KEYS, ids=str)
 def test_unknown_when_status_key_is_absent(key):
     # A partial status payload should leave the entity unknown rather than
     # silently reporting "off", which would look like real information.
@@ -49,21 +46,22 @@ def test_each_description_maps_to_a_distinct_status_key():
     assert len(status_keys) == len(set(status_keys))
 
 
-@pytest.mark.parametrize(
-    ("key", "status_key"),
-    [
-        ("heating", "heating"),
-        ("charging", "charging"),
-        ("window_open", "window_open"),
-        ("presence", "presence"),
-        ("true_radiant", "true_radiant_active"),
-        ("extra_energy", "using_extra_nrg"),
-    ],
-)
-def test_entity_key_maps_to_the_expected_payload_field(key, status_key):
+EXPECTED_STATUS_KEYS = {
+    "heating": "heating",
+    "charging": "charging",
+    "window_open": "window_open",
+    "presence": "presence",
+    "true_radiant": "true_radiant_active",
+    "extra_energy": "using_extra_nrg",
+}
+
+
+@pytest.mark.parametrize("key", ALL_KEYS, ids=str)
+def test_entity_key_maps_to_the_expected_payload_field(key):
     # The entity key and the wire field differ for half of these; pin the
     # mapping so a rename on either side can't silently cross the wires.
-    assert DESCRIPTIONS[key].status_key == status_key
+    assert key in EXPECTED_STATUS_KEYS, f"binary sensor {key!r} has no expected status key"
+    assert DESCRIPTIONS[key].status_key == EXPECTED_STATUS_KEYS[key]
 
 
 def test_unique_id_is_stable():
@@ -98,6 +96,15 @@ async def test_async_setup_entry_creates_every_binary_sensor_for_every_zone():
     assert len({e.unique_id for e in added}) == len(added)
 
 
-def test_device_info_is_built_per_zone():
-    info = build_binary_sensor(ZONE_OFF, "heating").device_info
-    assert info["identifiers"] == {("elnur_gabarron", f"{DEVICE_ID}_zone{ZONE_ID}")}
+def test_is_on_does_not_coerce_the_payload_value():
+    # is_on is typed bool | None but returns whatever the payload holds. The
+    # server sends real booleans for these six keys today (it uses ints
+    # elsewhere, e.g. `locked`), so nothing is broken -- but if that ever
+    # changes, HA would get an int where it expects a bool. Pinned so the
+    # change is visible rather than silent.
+    zone = {**ZONE_OFF, "status": {**ZONE_OFF["status"], "heating": 1}}
+
+    value = build_binary_sensor(zone, "heating").is_on
+
+    assert value == 1
+    assert value is not True

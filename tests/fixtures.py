@@ -1,14 +1,25 @@
 """Shared zone fixtures for entity tests.
 
-Shapes and values are taken from a real `dev_data` payload so the tests
-exercise what the server actually sends — string-typed numbers ("0", "23.7"),
-an int-typed `locked`, a genuinely non-zero `error_code` — rather than a
-tidied-up idea of it.
+`ZONE_OFF` is a real `dev_data` payload, so the tests exercise what the server
+actually sends rather than a tidied-up idea of it: string-typed numbers
+("0", "23.7"), an int-typed `locked` sitting among genuine booleans, and a
+non-zero `error_code` on a perfectly healthy idle heater.
 
-Identifying values are replaced: device/group/zone names, the device id and the
-hardware `uid` are synthetic, and the weekly `prog` schedule (which is a record
-of when someone is home) is dropped entirely. Nothing here reads it.
+`ZONE_HEATING` is that payload adjusted to a plausible running state. It has
+not been captured from a device, so treat its combination of flags as
+believable rather than authoritative.
+
+`ZONE_ALL_FLAGS_ON` is deliberately synthetic: every binary flag is true at
+once, which no real heater reports (window-open mode stops heating). It exists
+so the binary sensor tests can assert the true case for every key in one sweep
+— don't build behavioural tests on it.
+
+Identifying values are replaced: device/group/zone names and the device id are
+synthetic, the hardware `uid` is dropped, and the weekly `prog` schedule — a
+record of when someone is home — is left out entirely. Nothing reads it.
 """
+
+import copy
 
 DEVICE_ID = "0011223344556677aa"
 ZONE_ID = 2
@@ -76,24 +87,42 @@ ZONE_OFF = {
     "version": {"hw_version": "1.0", "fw_version": "1.4", "pid": "0b20"},
 }
 
-# The same heater mid-session: heating, drawing power, partially charged.
-# Values follow the shapes seen on the wire in an earlier capture.
-ZONE_HEATING = {
-    **ZONE_OFF,
-    "status": {
-        **ZONE_OFF["status"],
-        "mode": "auto",
-        "heating": True,
-        "charging": True,
-        "mtemp": "21.4",
-        "stemp": "20.0",
-        "power": "450",
-        "pcb_temp": 50,
-        "charge_level": 66,
-        "error_code": 0,
-        "presence": True,
-        "true_radiant_active": True,
-        "using_extra_nrg": True,
-        "window_open": True,
-    },
-}
+
+def _variant(**status_overrides: object) -> dict:
+    """Deep-copy ZONE_OFF and override status fields.
+
+    Deep, not shallow: a shallow spread would leave `setup` and `version`
+    pointing at the very same dicts as ZONE_OFF, so one test mutating a nested
+    value would break others depending on execution order.
+    """
+    zone = copy.deepcopy(ZONE_OFF)
+    zone["status"].update(status_overrides)
+    return zone
+
+
+# The same heater mid-session: warming the room, drawing power, part charged.
+# Plausible rather than captured — see the module docstring.
+ZONE_HEATING = _variant(
+    mode="auto",
+    heating=True,
+    charging=False,
+    mtemp="21.4",
+    stemp="20.0",
+    power="450",
+    pcb_temp=50,
+    charge_level=66,
+    error_code=0,
+    presence=True,
+    true_radiant_active=True,
+)
+
+# Synthetic: every binary flag true at once so the binary sensor tests can
+# sweep the true case. A real device never reports this combination.
+ZONE_ALL_FLAGS_ON = _variant(
+    heating=True,
+    charging=True,
+    window_open=True,
+    presence=True,
+    true_radiant_active=True,
+    using_extra_nrg=True,
+)
