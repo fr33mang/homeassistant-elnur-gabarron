@@ -10,7 +10,7 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, build_device_info
+from .const import DOMAIN, build_device_info, iter_resolvable_zones
 from .socketio_coordinator import ElnurSocketIOCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -27,8 +27,8 @@ async def async_setup_entry(
     # Create climate entities for each zone
     # Each zone becomes a separate device in Home Assistant
     entities = []
-    for zone_key, zone_data in coordinator.data.items():
-        entities.append(ElnurGabarronClimate(coordinator, zone_key, zone_data, entry))
+    for zone_key, zone_data, device_id, zone_id in iter_resolvable_zones(coordinator.data):
+        entities.append(ElnurGabarronClimate(coordinator, zone_key, zone_data, entry, device_id, zone_id))
         _LOGGER.debug("Created climate entity for %s", zone_data.get("name", zone_key))
 
     async_add_entities(entities)
@@ -54,19 +54,20 @@ class ElnurGabarronClimate(CoordinatorEntity, ClimateEntity):
         zone_key: str,
         zone_data: dict[str, Any],
         entry: ConfigEntry,
+        device_id: str,
+        zone_id: int,
     ) -> None:
         super().__init__(coordinator)
 
         self._entry = entry
         self._zone_key = zone_key  # Full key like "device_id_zone2"
 
-        # Extract device ID and zone ID
-        if "_zone" in zone_key:
-            self._device_id = zone_key.split("_zone")[0]
-            self._zone_id = zone_data.get("zone_id", int(zone_key.split("_zone")[1]))
-        else:
-            self._device_id = zone_key
-            self._zone_id = zone_data.get("zone_id", 3)
+        # Resolved by async_setup_entry, not here: ConfigEntryNotReady only
+        # means anything during entry setup, and an entity constructor may one
+        # day be reached from a coordinator callback where it would be logged
+        # as unhandled and the zone would vanish with no retry.
+        self._device_id = device_id
+        self._zone_id = zone_id
 
         self._attr_unique_id = f"{DOMAIN}_{self._device_id}_zone{self._zone_id}"
 

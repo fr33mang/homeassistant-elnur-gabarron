@@ -9,11 +9,11 @@ import pytest
 
 from custom_components.elnur_gabarron.socketio_coordinator import ElnurSocketIOCoordinator, parse_engineio_payload
 
-DEVICE_ID = "aed33c760ec38bd05e"
+from .fixtures import DEVICE_ID
 
 HEATER_NODE = {
     "addr": 2,
-    "name": "Living Room",
+    "name": "Test Zone A",
     "setup": {"factory_options": {"emitter_power": "450"}},
     "status": {"mode": "auto"},
     "version": {"fw": "1.0"},
@@ -21,7 +21,7 @@ HEATER_NODE = {
 
 NON_HEATER_NODE = {
     "addr": 9,
-    "name": "Unsupported thing",
+    "name": "Test Unsupported Node",
     "setup": {"factory_options": {}},
     "status": {},
     "version": {},
@@ -65,9 +65,9 @@ def coordinator(hass) -> ElnurSocketIOCoordinator:
     session = MagicMock(spec=aiohttp.ClientSession)
     coord = ElnurSocketIOCoordinator(hass, api, session)
     coord._device_id = DEVICE_ID
-    coord._device_name = "Bajo Sedes"
+    coord._device_name = "Test Device"
     coord._group_id = "group1"
-    coord._group_name = "Torre Sedes"
+    coord._group_name = "Test Home"
     return coord
 
 
@@ -89,9 +89,9 @@ def test_parse_dev_data_message_builds_zone_data(coordinator):
     assert result is not None
     key = f"{DEVICE_ID}_zone2"
     assert key in result
-    assert result[key]["name"] == "Living Room"
-    assert result[key]["device_name"] == "Bajo Sedes"
-    assert result[key]["group_name"] == "Torre Sedes"
+    assert result[key]["name"] == "Test Zone A"
+    assert result[key]["device_name"] == "Test Device"
+    assert result[key]["group_name"] == "Test Home"
 
 
 def test_parse_dev_data_message_skips_non_heater_zones(coordinator):
@@ -287,3 +287,19 @@ def test_log_skipped_node_warns_with_type_for_unknown_node(coordinator, caplog):
     assert len(caplog.records) == 1
     # The type is the only thing that makes such a report actionable for us.
     assert "who_knows" in caplog.records[0].getMessage()
+
+
+def test_parse_dev_data_message_skips_a_heater_node_without_addr(coordinator):
+    # _is_heater_zone decides on type/factory_options and never looks at addr,
+    # so a heater-shaped node with no addr used to become a "<dev>_zoneNone"
+    # zone at startup -- while _handle_dev_data_event ignored the same node on
+    # every later update. The two paths now agree.
+    addrless = {**HEATER_NODE}
+    del addrless["addr"]
+    payload = {"nodes": [HEATER_NODE, addrless]}
+    msg = f'42/api/v2/socket_io,["dev_data",{json.dumps(payload)}]'
+
+    result = coordinator._parse_dev_data_message(msg)
+
+    assert set(result) == {f"{DEVICE_ID}_zone2"}
+    assert not any("None" in key for key in result)

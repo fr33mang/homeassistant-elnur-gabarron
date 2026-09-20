@@ -13,7 +13,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import StateType
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, build_device_info
+from .const import DOMAIN, build_device_info, iter_resolvable_zones
 from .socketio_coordinator import ElnurSocketIOCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -40,8 +40,13 @@ def _float_from_status(zone_data: dict[str, Any], key: str) -> float | None:
 
 
 def _get_priority(zone_data: dict[str, Any]) -> str | None:
+    # isinstance, not a bare truthiness check: this is the same server that
+    # sends numbers as strings and ints where booleans belong, and a priority
+    # arriving as an int would otherwise raise AttributeError out of a property
+    # Home Assistant calls on every state write. The neighbouring extractors
+    # already swallow a wrong type and return None; match them.
     priority = zone_data.get("setup", {}).get("priority")
-    return priority.capitalize() if priority else None
+    return priority.capitalize() if isinstance(priority, str) and priority else None
 
 
 def _get_firmware_version(zone_data: dict[str, Any]) -> str | None:
@@ -182,14 +187,7 @@ async def async_setup_entry(
     coordinator: ElnurSocketIOCoordinator = hass.data[DOMAIN][entry.entry_id]
 
     entities: list[ElnurGabarronSensor] = []
-    for zone_key, zone_data in coordinator.data.items():
-        zone_id = zone_data.get("zone_id")
-
-        if "_zone" in zone_key:
-            actual_device_id = zone_key.split("_zone")[0]
-        else:
-            actual_device_id = zone_key
-
+    for zone_key, zone_data, actual_device_id, zone_id in iter_resolvable_zones(coordinator.data):
         zone_name = zone_data.get("name", f"Heater Zone {zone_id}")
 
         for description in SENSOR_DESCRIPTIONS:

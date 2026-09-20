@@ -1,6 +1,11 @@
+import logging
+from collections.abc import Iterator
 from typing import Any
 
+from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.device_registry import DeviceInfo
+
+_LOGGER = logging.getLogger(__name__)
 
 DOMAIN = "elnur_gabarron"
 
@@ -26,6 +31,55 @@ DEFAULT_SERIAL_ID = "7"
 # Device info
 MANUFACTURER = "Elnur Gabarron"
 MODEL = "Electric Heater"
+
+
+def iter_resolvable_zones(
+    zones: dict[str, dict[str, Any]],
+) -> Iterator[tuple[str, dict[str, Any], str, int]]:
+    """Yield (zone_key, zone_data, device_id, zone_id) for each usable zone.
+
+    The coordinator writes device_id and zone_id into every zone it builds, so
+    both are read rather than recovered by taking the zone key apart. Deriving
+    them from the key was fragile in two ways: it broke on a device id
+    containing "_zone", and its fallback branch quietly used the whole key as
+    the device id. Both failures land in `unique_id`, which Home Assistant
+    persists to the entity registry, so a moment of malformed data leaves
+    orphaned entities behind that outlive it.
+
+    A zone that can't be resolved is skipped with a warning rather than taken
+    as fatal: zone_id comes from a single node's `addr`, so one malformed node
+    would otherwise cost the user every healthy zone on the device, forever, if
+    the device keeps sending it. device_id is the same value for every zone, so
+    if that is what's missing nothing resolves at all — which is the one case
+    that raises, letting Home Assistant retry setup with backoff.
+
+    The raise happens on exhaustion, so a caller that breaks out of the loop
+    early won't see it. Every platform consumes this fully.
+    """
+    resolved = 0
+
+    for zone_key, zone_data in zones.items():
+        device_id = zone_data.get("device_id")
+        zone_id = zone_data.get("zone_id")
+
+        if not device_id or zone_id is None:
+            _LOGGER.warning(
+                "Skipping zone %r: device_id=%r zone_id=%r — refusing to register entities "
+                "under an identifier that would be wrong",
+                zone_key,
+                device_id,
+                zone_id,
+            )
+            continue
+
+        resolved += 1
+        yield zone_key, zone_data, device_id, zone_id
+
+    if zones and not resolved:
+        raise ConfigEntryNotReady(
+            f"None of the {len(zones)} zone(s) reported by the coordinator could be "
+            "resolved to a device_id and zone_id"
+        )
 
 
 def build_device_info(
