@@ -20,6 +20,32 @@ SOCKETIO_BASE_URL = "https://api-elnur.helki.com"
 SOCKETIO_PATH = "/socket.io/"
 SOCKETIO_NAMESPACE = "/api/v2/socket_io"
 
+# Node types taken from the NodeType enum in the official web client's bundle:
+#   acm, htr, htr_mod, towel_rail_heater, water_storage_heater,
+#   solar_storage_heater, pmo, thm, timer
+# Only "acm" has been seen on a live device; the rest come from that enum.
+
+# Heated room zones -- what this integration exposes as climate entities.
+HEATER_NODE_TYPES = {"acm", "htr", "htr_mod", "towel_rail_heater"}
+
+# Known node types that are not a room zone, so the factory_options fallback
+# below must not get a chance to guess at them. Water and solar storage tanks
+# are heaters and do carry heater-shaped factory_options, but they belong on
+# HA's water_heater platform rather than climate, so creating a thermostat for
+# one would be wrong rather than merely incomplete.
+NON_ZONE_NODE_TYPES = {
+    "pmo",
+    "thm",
+    "timer",
+    "water_storage_heater",
+    "solar_storage_heater",
+}
+
+# Of those, the ones that aren't heating anything at all. A power monitor or a
+# thermostat sitting next to the heaters is routine, so it's skipped quietly;
+# an unsupported tank is worth telling the user about.
+NON_HEATING_NODE_TYPES = {"pmo", "thm", "timer"}
+
 
 def parse_engineio_payload(data: bytes) -> list:
     """Parse Engine.IO v3 binary framed payload."""
@@ -116,9 +142,52 @@ class ElnurSocketIOCoordinator(DataUpdateCoordinator):
         self._ws = None
 
     def _is_heater_zone(self, node: dict) -> bool:
-        """Return True if the zone looks like a heater (has accumulator or emitter power)."""
+        """Return True if the node is a heater zone we can expose as entities.
+
+        Prefers the node's own "type" discriminator, which is what the official
+        web client keys off. Falls back to the original factory_options
+        heuristic only for a type that isn't in the vendor's enum at all, so an
+        unknown-but-heater-shaped node keeps working rather than silently
+        disappearing, while a known non-zone node is never guessed at.
+        """
+        node_type = node.get("type")
+
+        if node_type in HEATER_NODE_TYPES:
+            return True
+        if node_type in NON_ZONE_NODE_TYPES:
+            return False
+
         factory_opts = node.get("setup", {}).get("factory_options", {})
         return bool(factory_opts.get("accumulator_power") or factory_opts.get("emitter_power"))
+
+    def _log_skipped_node(self, node: dict) -> None:
+        """Report a node that won't become entities, at a level that fits why.
+
+        A power monitor or thermostat sitting next to the heaters is expected and
+        routine, so warning about it every time would train the user to ignore
+        the message. A node that does heat something we don't support yet, or one
+        we don't recognise at all, is worth surfacing -- and the type is included
+        because it's the only thing that makes such a report actionable.
+        """
+        if node.get("type") in NON_HEATING_NODE_TYPES:
+            _LOGGER.debug(
+                "Skipping zone %s ('%s') on device %s — node type %s is not a heater",
+                node.get("addr"),
+                node.get("name", "unknown"),
+                self._device_id,
+                node.get("type"),
+            )
+            return
+
+        _LOGGER.warning(
+            "Skipping zone %s ('%s', type=%s) on device %s "
+            "— not a recognised heater node. "
+            "This device type is not supported yet.",
+            node.get("addr"),
+            node.get("name", "unknown"),
+            node.get("type", "unknown"),
+            self._device_id,
+        )
 
     async def _fetch_initial_data(self) -> dict[str, Any]:
         """Fetch initial device data via Socket.IO dev_data (synchronously)."""
@@ -175,14 +244,7 @@ class ElnurSocketIOCoordinator(DataUpdateCoordinator):
 
         for node in nodes:
             if not self._is_heater_zone(node):
-                _LOGGER.warning(
-                    "Skipping zone %s ('%s') on device %s "
-                    "— no heater factory_options found. "
-                    "This device type is not supported yet.",
-                    node.get("addr"),
-                    node.get("name", "unknown"),
-                    self._device_id,
-                )
+                self._log_skipped_node(node)
                 continue
 
             zone_id = node.get("addr")
@@ -762,29 +824,30 @@ class ElnurSocketIOCoordinator(DataUpdateCoordinator):
             path = payload.get("path", "")
             body = payload.get("body", {})
 
-            # Parse path to get device and zone
-            # Format: /acm/2/status or /acm/3/setup or /connected
-            if "/acm/" in path:
-                parts = path.split("/")
-                if len(parts) >= 3:
-                    zone_id = int(parts[2])
-                    update_type = parts[3] if len(parts) > 3 else "status"
+            # Parse path to get device and zone.
+            # Format: /acm/2/status or /acm/3/setup or /connected -- the first
+            # segment is the node type, so match any heater type instead of
+            # hardcoding the accumulator one.
+            parts = path.split("/")
+            if len(parts) >= 3 and parts[1] in HEATER_NODE_TYPES:
+                zone_id = int(parts[2])
+                update_type = parts[3] if len(parts) > 3 else "status"
 
-                    # Update coordinator data for this zone
-                    if self._device_id:
-                        unique_key = f"{self._device_id}_zone{zone_id}"
-                        if unique_key in (self.data or {}):
-                            new_data = dict(self.data)
-                            zone = dict(new_data.get(unique_key, {}))
-                            if update_type == "status":
-                                zone["status"] = body
-                            elif update_type == "setup":
-                                zone["setup"] = body
-                            new_data[unique_key] = zone
+                # Update coordinator data for this zone
+                if self._device_id:
+                    unique_key = f"{self._device_id}_zone{zone_id}"
+                    if unique_key in (self.data or {}):
+                        new_data = dict(self.data)
+                        zone = dict(new_data.get(unique_key, {}))
+                        if update_type == "status":
+                            zone["status"] = body
+                        elif update_type == "setup":
+                            zone["setup"] = body
+                        new_data[unique_key] = zone
 
-                            # Notify listeners (copy-on-write)
-                            self.async_set_updated_data(new_data)
-                            _LOGGER.debug("Updated %s %s", unique_key, update_type)
+                        # Notify listeners (copy-on-write)
+                        self.async_set_updated_data(new_data)
+                        _LOGGER.debug("Updated %s %s", unique_key, update_type)
 
         except Exception as err:
             _LOGGER.error("Failed to handle update event: %s", err)
@@ -801,14 +864,7 @@ class ElnurSocketIOCoordinator(DataUpdateCoordinator):
             # Update coordinator data with full zone info
             for node in nodes:
                 if not self._is_heater_zone(node):
-                    _LOGGER.warning(
-                        "Skipping zone %s ('%s') on device %s "
-                        "— no heater factory_options found. "
-                        "This device type is not supported yet.",
-                        node.get("addr"),
-                        node.get("name", "unknown"),
-                        self._device_id,
-                    )
+                    self._log_skipped_node(node)
                     continue
 
                 addr = node.get("addr")

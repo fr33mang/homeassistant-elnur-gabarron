@@ -19,7 +19,7 @@ Unofficial Home Assistant integration for Elnur Gabarron electric heaters based 
 
 ## Features
 
-- **Supports only heaters** - I don't have other devices to test and implement support for them
+- **Supports heater zones only** - storage heaters (`acm`), direct heaters (`htr`), modulating heaters (`htr_mod`) and towel rails. Water and solar storage tanks, power meters, thermostats and timers are recognised and skipped — I don't have that hardware to test against
 - **Real-time updates** - Instant synchronization via Socket.IO, upgraded to WebSocket transport when the server allows it (falls back to HTTP long-polling otherwise)
 - **Automatic device discovery** - Each radiator zone appears as a separate device
 - **Temperature control** - Set target temperature and view current temperature
@@ -73,16 +73,18 @@ Each radiator zone appears as a **separate device** containing all its entities:
 ### Climate Entities (per zone)
 - Current temperature monitoring
 - Target temperature control (5-30°C)
-- HVAC modes (Heat/Off)
+- HVAC modes (Heat/Auto/Off) — **Auto** follows the schedule programmed on the heater itself
 - HVAC actions (Heating/Idle/Off)
 
 <img width="380" height="385" alt="image" src="https://github.com/user-attachments/assets/8cf01a4d-4a1a-45a3-91d2-e33b07f166fc" />
 
 
 ### Temperature Controls (Configuration Section, per zone)
-- **Anti-Frost Temperature** (5-15°C) - Freeze protection setpoint
-- **Economy Temperature** (7-30°C) - Energy-saving mode setpoint
-- **Comfort Temperature** (7-30°C) - Maximum comfort setpoint
+All three accept 7-30°C:
+
+- **Anti-Frost Temperature** - Freeze protection setpoint
+- **Economy Temperature** - Energy-saving mode setpoint
+- **Comfort Temperature** - Maximum comfort setpoint
 
 <img width="261" height="234" alt="image" src="https://github.com/user-attachments/assets/db54a8a7-7234-4738-945a-5e8789110324" />
 
@@ -100,9 +102,11 @@ Each radiator zone appears as a **separate device** containing all its entities:
 - **Power** - Current power consumption
 - **Target Charge** - Target charge percentage
 - **PCB Temperature** - Internal board temperature
+- **Priority** - Zone heating priority
 - **Error Code** - Device error status
 - **Firmware Version** - Installed firmware
-- **Charging Schedule** - Active charging periods and days
+- **Charging Slot 1** / **Charging Slot 2** - Active charging periods
+- **Charging Days** - Days the charging schedule applies to
 
 <img width="411" height="590" alt="image" src="https://github.com/user-attachments/assets/e5054f85-662e-4714-b30a-0b067c63c0af" />
 
@@ -158,7 +162,7 @@ Only the actual radiator zones appear as devices—no empty hub devices are crea
 - Multiple zones per device hub are fully supported
 - Each zone appears as a separate device in Home Assistant
 - Changes sync bidirectionally (HA ↔ Elnur app)
-- Should support multiple device hubs in one home or across multiple homes
+- **One hub per config entry**: only the first device returned by the API is set up. If your account has more than one hub, the others are currently ignored
 
 ## License
 
