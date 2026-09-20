@@ -10,7 +10,7 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, build_device_info
+from .const import DOMAIN, build_device_info, resolve_zone_identity
 from .socketio_coordinator import ElnurSocketIOCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -60,13 +60,7 @@ class ElnurGabarronClimate(CoordinatorEntity, ClimateEntity):
         self._entry = entry
         self._zone_key = zone_key  # Full key like "device_id_zone2"
 
-        # Extract device ID and zone ID
-        if "_zone" in zone_key:
-            self._device_id = zone_key.split("_zone")[0]
-            self._zone_id = zone_data.get("zone_id", int(zone_key.split("_zone")[1]))
-        else:
-            self._device_id = zone_key
-            self._zone_id = zone_data.get("zone_id", 3)
+        self._device_id, self._zone_id = resolve_zone_identity(zone_key, zone_data)
 
         self._attr_unique_id = f"{DOMAIN}_{self._device_id}_zone{self._zone_id}"
 

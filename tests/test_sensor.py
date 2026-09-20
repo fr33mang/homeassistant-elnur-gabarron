@@ -257,16 +257,15 @@ async def test_async_setup_entry_creates_every_sensor_for_every_zone():
     assert len({e.unique_id for e in added}) == len(added)  # no collisions across zones
 
 
-async def test_async_setup_entry_recovers_device_id_from_the_zone_key():
-    # The device id is parsed back out of "<device_id>_zone<n>"; a device id
-    # that itself contains an underscore must not be truncated.
+async def test_device_id_comes_from_the_payload_not_the_zone_key():
+    # The device id used to be recovered by splitting the zone key on "_zone",
+    # which truncated any device id containing that substring. It is now read
+    # from the payload, so the two are allowed to disagree and the payload wins.
     from custom_components.elnur_gabarron.const import DOMAIN
     from custom_components.elnur_gabarron.sensor import async_setup_entry
 
-    odd_device = "dev_with_underscores"
-    key = f"{odd_device}_zone2"
     coordinator = MagicMock()
-    coordinator.data = {key: {**ZONE_OFF, "zone_id": 2}}
+    coordinator.data = {"some_zone_key_zone2": {**ZONE_OFF, "device_id": "dev_zone_with_underscores", "zone_id": 2}}
 
     hass = MagicMock()
     entry = MagicMock()
@@ -275,7 +274,47 @@ async def test_async_setup_entry_recovers_device_id_from_the_zone_key():
 
     await async_setup_entry(hass, entry, lambda entities: added.extend(entities))
 
-    assert all(e.unique_id.startswith(f"elnur_gabarron_{odd_device}_2_") for e in added)
+    assert added
+    assert all(e.unique_id.startswith("elnur_gabarron_dev_zone_with_underscores_2_") for e in added)
+
+
+def _zone_missing(*keys: str, **overrides: object) -> dict:
+    """ZONE_OFF with keys removed -- spreading an override can't delete one."""
+    zone = {k: v for k, v in ZONE_OFF.items() if k not in keys}
+    zone.update(overrides)
+    return zone
+
+
+@pytest.mark.parametrize(
+    "broken_zone",
+    [
+        _zone_missing("device_id"),
+        _zone_missing("zone_id"),
+        _zone_missing(device_id=""),
+        _zone_missing(device_id=None),
+    ],
+    ids=["no device_id", "no zone_id", "empty device_id", "null device_id"],
+)
+async def test_setup_refuses_rather_than_registering_a_wrong_identifier(broken_zone):
+    # A wrong unique_id is written into HA's entity registry and outlives the
+    # bad data that caused it, so setup must fail and be retried instead.
+    from homeassistant.exceptions import ConfigEntryNotReady
+
+    from custom_components.elnur_gabarron.const import DOMAIN
+    from custom_components.elnur_gabarron.sensor import async_setup_entry
+
+    coordinator = MagicMock()
+    coordinator.data = {ZONE_KEY: broken_zone}
+
+    hass = MagicMock()
+    entry = MagicMock()
+    hass.data = {DOMAIN: {entry.entry_id: coordinator}}
+    added = []
+
+    with pytest.raises(ConfigEntryNotReady):
+        await async_setup_entry(hass, entry, lambda entities: added.extend(entities))
+
+    assert added == []
 
 
 @pytest.mark.parametrize(

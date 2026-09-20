@@ -13,7 +13,7 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, build_device_info
+from .const import DOMAIN, build_device_info, resolve_zone_identity
 from .socketio_coordinator import ElnurSocketIOCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -76,12 +76,7 @@ async def async_setup_entry(
 
     entities: list[ElnurGabarronBinarySensor] = []
     for zone_key, zone_data in coordinator.data.items():
-        zone_id = zone_data.get("zone_id")
-
-        if "_zone" in zone_key:
-            actual_device_id = zone_key.split("_zone")[0]
-        else:
-            actual_device_id = zone_key
+        actual_device_id, zone_id = resolve_zone_identity(zone_key, zone_data)
 
         zone_name = zone_data.get("name", f"Heater Zone {zone_id}")
 

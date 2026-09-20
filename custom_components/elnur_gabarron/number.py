@@ -12,7 +12,7 @@ from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, build_device_info
+from .const import DOMAIN, build_device_info, resolve_zone_identity
 from .socketio_coordinator import ElnurSocketIOCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -29,8 +29,7 @@ async def async_setup_entry(
     # Create number entities for each zone
     entities = []
     for zone_key, zone_data in coordinator.data.items():
-        device_id = zone_data.get("device_id")
-        zone_id = zone_data.get("zone_id")
+        device_id, zone_id = resolve_zone_identity(zone_key, zone_data)
         zone_name = zone_data.get("name", f"Zone {zone_id}")
 
         # Add temperature setting numbers in desired order
