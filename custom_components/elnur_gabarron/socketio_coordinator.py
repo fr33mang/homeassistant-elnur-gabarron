@@ -87,6 +87,8 @@ class ElnurSocketIOCoordinator(DataUpdateCoordinator):
         self._ws: aiohttp.ClientWebSocketResponse | None = None
         self._ping_interval: float = 25.0
         self._ping_timeout: float = 60.0
+        self._ping_task: asyncio.Task | None = None
+        self._last_pong_time: float = 0
 
     @property
     def group_name(self) -> str | None:
@@ -143,9 +145,13 @@ class ElnurSocketIOCoordinator(DataUpdateCoordinator):
             # returning, so the response has to be awaited on whichever
             # transport ends up active rather than assumed to be polling.
             _LOGGER.debug("Connecting to Socket.IO to fetch zone data")
-            await self._connect_socketio()
+            if not await self._connect_socketio():
+                raise UpdateFailed("Failed to connect to Socket.IO")
 
             device_data = await self._await_dev_data(timeout=10.0)
+            if device_data is None:
+                raise UpdateFailed("Timed out waiting for dev_data from Socket.IO")
+
             _LOGGER.debug("Received dev_data with %s zone(s)", len(device_data))
             return device_data
 
@@ -199,25 +205,41 @@ class ElnurSocketIOCoordinator(DataUpdateCoordinator):
 
         return device_data
 
-    async def _await_dev_data(self, timeout: float) -> dict[str, Any]:
-        """Wait for a dev_data event on whichever transport is currently active."""
+    async def _await_dev_data(self, timeout: float) -> dict[str, Any] | None:
+        """Wait for a dev_data event on whichever transport is currently active.
+
+        Returns None if no dev_data event arrived within timeout (a real
+        failure the caller should retry on), or a dict — possibly empty, if
+        the device genuinely has no supported zones — once one did.
+        """
         deadline = time.monotonic() + timeout
 
         if self._ws is not None:
+            ws = self._ws
             while (remaining := deadline - time.monotonic()) > 0:
                 try:
-                    msg = await asyncio.wait_for(self._ws.receive(), timeout=remaining)
+                    msg = await asyncio.wait_for(ws.receive(), timeout=remaining)
                 except asyncio.TimeoutError:
+                    break
+
+                if msg.type in (aiohttp.WSMsgType.CLOSED, aiohttp.WSMsgType.CLOSING, aiohttp.WSMsgType.ERROR):
+                    # The socket won't produce anything else; without this the
+                    # loop would spin on an immediately-returning receive()
+                    # until the whole timeout elapsed.
                     break
                 if msg.type != aiohttp.WSMsgType.TEXT:
                     continue
                 if msg.data == "2":
-                    await self._ws.send_str("3")  # PING -> PONG
+                    await ws.send_str("3")  # Defensive PONG, see _websocket_loop
                     continue
+                # Anything else here (namespace acks, "update" events that
+                # happen to arrive before "dev_data") is intentionally
+                # dropped: nothing is registered as an entity yet during this
+                # initial fetch, so there's nothing meaningful to apply it to.
                 device_data = self._parse_dev_data_message(msg.data)
                 if device_data is not None:
                     return device_data
-            return {}
+            return None
 
         # Polling fallback
         params = {
@@ -248,7 +270,7 @@ class ElnurSocketIOCoordinator(DataUpdateCoordinator):
                 _LOGGER.debug("Poll error: %s", e)
                 continue
 
-        return {}
+        return None
 
     async def _async_update_data(self) -> dict[str, Any]:
         """Initial data fetch (called once at startup)."""
@@ -257,6 +279,14 @@ class ElnurSocketIOCoordinator(DataUpdateCoordinator):
     async def _connect_socketio(self) -> bool:
         """Connect to Socket.IO server."""
         try:
+            # A fresh handshake means a fresh sid; any previously upgraded
+            # WebSocket belongs to the old session and would otherwise leak
+            # (nothing reads from it and async_stop() can no longer reach it
+            # once self._ws is overwritten below).
+            if self._ws is not None and not self._ws.closed:
+                await self._ws.close()
+            self._ws = None
+
             token = await self.api.async_get_access_token()
             params = {
                 "token": token,
@@ -350,6 +380,10 @@ class ElnurSocketIOCoordinator(DataUpdateCoordinator):
 
             ws_url = f"{ws_scheme_url}{SOCKETIO_PATH}?{urlencode(params)}"
 
+            # heartbeat=None: disable aiohttp's own WS-protocol ping/pong frames.
+            # Keepalive here has to be the Engine.IO-level "2"/"3" text packets
+            # (sent by _ping_sender), not WebSocket control frames — the server
+            # only understands the former.
             ws = await self.session.ws_connect(ws_url, timeout=aiohttp.ClientTimeout(total=10), heartbeat=None)
 
             await ws.send_str("2probe")
@@ -402,14 +436,10 @@ class ElnurSocketIOCoordinator(DataUpdateCoordinator):
                 self._reconnect_count = 0
                 self._consecutive_connection_failures = 0
                 reconnect_delay = 5
-                last_activity = time.monotonic()
-                self._last_update_time = last_activity
-                self._last_successful_connect_time = last_activity
+                self._last_update_time = time.monotonic()
+                self._last_successful_connect_time = self._last_update_time
 
-                if self._ws is not None:
-                    await self._websocket_loop()
-                else:
-                    await self._polling_loop()
+                await self._run_with_ping(self._websocket_loop() if self._ws is not None else self._polling_loop())
 
                 # Connection ended, will reconnect
                 self._connected = False
@@ -426,6 +456,73 @@ class ElnurSocketIOCoordinator(DataUpdateCoordinator):
                 reconnect_delay = min(reconnect_delay * 2, 60)
 
         _LOGGER.debug("Socket.IO listener stopped")
+
+    async def _run_with_ping(self, read_loop) -> None:
+        """Run a read loop (WS or polling) alongside the client-initiated ping sender."""
+        self._last_pong_time = time.monotonic()  # don't immediately trip the missed-pong check
+        self._ping_task = asyncio.create_task(self._ping_sender())
+        try:
+            await read_loop
+        finally:
+            self._ping_task.cancel()
+            try:
+                await self._ping_task
+            except asyncio.CancelledError:
+                pass
+            self._ping_task = None
+
+    async def _send_ping(self) -> None:
+        """Send an Engine.IO ping ("2") on whichever transport is currently active."""
+        if self._ws is not None:
+            await self._ws.send_str("2")
+            return
+
+        params = {
+            "token": await self.api.async_get_access_token(),
+            "EIO": "3",
+            "transport": "polling",
+            "sid": self._sid,
+        }
+        if self._device_id:
+            params["dev_id"] = self._device_id
+        url = f"{SOCKETIO_BASE_URL}{SOCKETIO_PATH}?{urlencode(params)}&t={time.time_ns()}"
+        await self.session.post(url, data="2")
+
+    async def _ping_sender(self) -> None:
+        """Send client-initiated Engine.IO pings and disconnect on a missed pong.
+
+        EIO=3 (used here) has the CLIENT send "2" every pingInterval and expect
+        a "3" back within pingTimeout — the opposite direction from EIO=4. The
+        server never pings us; if we don't ping it, it silently drops the
+        session once pingInterval + pingTimeout has elapsed since connecting,
+        which is exactly what a 500/close every ~85s without this task was.
+        Runs as its own task so its schedule doesn't depend on whichever read
+        loop (WS or polling) happens to be active.
+        """
+        try:
+            while self._connected:
+                await asyncio.sleep(self._ping_interval)
+                if not self._connected:
+                    break
+
+                sent_at = time.monotonic()
+                try:
+                    await self._send_ping()
+                except Exception as err:
+                    _LOGGER.debug("Failed to send ping, reconnecting: %s", err)
+                    self._connected = False
+                    break
+
+                await asyncio.sleep(self._ping_timeout)
+                if self._last_pong_time < sent_at:
+                    _LOGGER.warning(
+                        "No pong received within %ss of ping, reconnecting...",
+                        self._ping_timeout,
+                    )
+                    self._connected = False
+                    break
+        except asyncio.CancelledError:
+            pass
 
     async def _polling_loop(self) -> None:
         """Read loop while connected via the Engine.IO polling transport.
@@ -499,7 +596,14 @@ class ElnurSocketIOCoordinator(DataUpdateCoordinator):
                                 self._connected = False
                                 break
 
-                            # Handle Engine.IO PING
+                            # Handle Engine.IO PONG (reply to our own client-initiated ping)
+                            if msg == "3":
+                                self._last_pong_time = current_time
+                                continue
+
+                            # Defensive: EIO=3 pings are sent by the client, not the
+                            # server, so this shouldn't normally happen. Reply anyway
+                            # in case the server ever does send one.
                             if msg == "2":
                                 await self.session.post(f"{base_url}&t={time.time_ns()}", data="3")  # Send PONG
                                 _LOGGER.debug("Received PING, sent PONG")
@@ -574,7 +678,14 @@ class ElnurSocketIOCoordinator(DataUpdateCoordinator):
                     self._connected = False
                     break
 
-                # Handle Engine.IO PING
+                # Handle Engine.IO PONG (reply to our own client-initiated ping)
+                if data == "3":
+                    self._last_pong_time = current_time
+                    continue
+
+                # Defensive: EIO=3 pings are sent by the client, not the server,
+                # so this shouldn't normally happen. Reply anyway in case the
+                # server ever does send one.
                 if data == "2":
                     await ws.send_str("3")  # Send PONG
                     _LOGGER.debug("Received PING, sent PONG (WebSocket)")

@@ -138,7 +138,7 @@ Only the actual radiator zones appear as devices—no empty hub devices are crea
 ### No real-time updates
 - Check Socket.IO connection in logs
 - Verify no firewall blocking `api-elnur.helki.com` (including `wss://` for the WebSocket transport)
-- Look for reconnection messages — the server closes and re-establishes the WebSocket session roughly every 85 seconds (its `pingInterval` + `pingTimeout`), which is expected and not an error
+- Occasional reconnection messages are normal; frequent ones (repeating faster than a few minutes apart) usually mean something's wrong — check for errors right before the reconnect
 
 ## Support
 
@@ -150,7 +150,7 @@ Only the actual radiator zones appear as devices—no empty hub devices are crea
 
 - Integration automatically manages OAuth2 tokens
 - Socket.IO sessions run over WebSocket when the server supports it, falling back to HTTP long-polling otherwise
-- The server cycles the WebSocket session every ~85 seconds (`pingInterval` + `pingTimeout` from its handshake); auto-reconnection is normal and near-instant
+- Engine.IO pings are client-initiated on this server (`EIO=3`): the integration sends a ping every `pingInterval` and expects a pong within `pingTimeout`, keeping the session alive indefinitely; auto-reconnection only kicks in on an actual disconnect
 - All credentials stored securely in Home Assistant config
 - Integration title and zone names update automatically from Elnur API/app
 - Multiple zones per device hub are fully supported
