@@ -81,8 +81,6 @@ class ElnurSocketIOCoordinator(DataUpdateCoordinator):
         self._connected = False
         self._listener_task: asyncio.Task | None = None
         self._reconnect_count = 0
-        self._last_update_time: float = 0
-        self._last_successful_connect_time: float = 0
         self._consecutive_connection_failures = 0
         self._ws: aiohttp.ClientWebSocketResponse | None = None
         self._ping_interval: float = 25.0
@@ -436,8 +434,6 @@ class ElnurSocketIOCoordinator(DataUpdateCoordinator):
                 self._reconnect_count = 0
                 self._consecutive_connection_failures = 0
                 reconnect_delay = 5
-                self._last_update_time = time.monotonic()
-                self._last_successful_connect_time = self._last_update_time
 
                 await self._run_with_ping(self._websocket_loop() if self._ws is not None else self._polling_loop())
 
@@ -517,6 +513,7 @@ class ElnurSocketIOCoordinator(DataUpdateCoordinator):
                 except Exception as err:
                     _LOGGER.debug("Failed to send ping, reconnecting: %s", err)
                     self._connected = False
+                    await self._close_ws_for_reconnect()
                     break
 
                 # Tolerate a missed pong or two (server hiccup, jitter) rather
@@ -529,9 +526,21 @@ class ElnurSocketIOCoordinator(DataUpdateCoordinator):
                         int(stale_for),
                     )
                     self._connected = False
+                    # Close the socket now rather than leaving the read loop's
+                    # ws.receive() to discover this on its own timeout: a
+                    # closed ws makes receive() return CLOSED immediately.
+                    await self._close_ws_for_reconnect()
                     break
         except asyncio.CancelledError:
             pass
+
+    async def _close_ws_for_reconnect(self) -> None:
+        """Close the active WebSocket, if any, to wake up a blocked ws.receive()."""
+        if self._ws is not None and not self._ws.closed:
+            try:
+                await self._ws.close()
+            except Exception:
+                pass
 
     async def _polling_loop(self) -> None:
         """Read loop while connected via the Engine.IO polling transport.
@@ -561,10 +570,10 @@ class ElnurSocketIOCoordinator(DataUpdateCoordinator):
                 poll_count += 1
                 current_time = time.monotonic()
 
-                # No "quiet for N minutes" watchdog on _last_update_time here:
-                # a pong (or any other activity, tracked below via
-                # last_activity) is proof the connection is alive on its own,
-                # regardless of whether the heaters have anything to report.
+                # No "quiet for N minutes" watchdog here: a pong (or any other
+                # activity, tracked below via last_activity) is proof the
+                # connection is alive on its own, regardless of whether the
+                # heaters have anything to report.
 
                 # Check for idle session (no activity within the server's own timeout budget)
                 elapsed = current_time - last_activity
@@ -573,7 +582,12 @@ class ElnurSocketIOCoordinator(DataUpdateCoordinator):
                     self._connected = False
                     break
 
-                # Periodic keepalive dev_data request (every 30s)
+                # Periodic dev_data re-request as a data freshness safety net.
+                # Not a real keepalive any more -- _ping_sender already keeps
+                # the session itself alive -- and "every 300 polls" no longer
+                # means "every 30s" now that each poll can block for up to
+                # pingInterval (not a fixed 0.1s), but it's cheap insurance
+                # against missing an update on this fallback path.
                 if poll_count % 300 == 0:
                     _LOGGER.debug("Sending periodic dev_data keepalive...")
                     dev_data_event = f'42{SOCKETIO_NAMESPACE},["dev_data"]'
@@ -619,7 +633,6 @@ class ElnurSocketIOCoordinator(DataUpdateCoordinator):
 
                             # Handle Socket.IO events (actual data updates)
                             if msg.startswith("42"):
-                                self._last_update_time = current_time  # Real update received
                                 self._consecutive_connection_failures = 0  # Reset failure counter on successful data
                                 await self._handle_socketio_event(msg)
                     elif resp.status >= 400:
@@ -701,7 +714,6 @@ class ElnurSocketIOCoordinator(DataUpdateCoordinator):
 
                 # Handle Socket.IO events (actual data updates)
                 if data.startswith("42"):
-                    self._last_update_time = current_time
                     self._consecutive_connection_failures = 0
                     await self._handle_socketio_event(data)
 

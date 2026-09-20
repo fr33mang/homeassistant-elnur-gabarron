@@ -156,6 +156,22 @@ async def test_ping_sender_disconnects_on_missed_pong(coordinator):
     assert coordinator._connected is False
 
 
+async def test_send_ping_frames_polling_packet_with_length_prefix(coordinator):
+    # Engine.IO polling packets are length-prefixed ("<len>:<packet>"), same
+    # as the namespace-join/dev_data packets sent elsewhere in this file. A
+    # bare "2" is not a valid packet on this transport.
+    coordinator._ws = None
+    coordinator._sid = "sid123"
+    coordinator.api.async_get_access_token = AsyncMock(return_value="tok")
+    coordinator.session.post = AsyncMock()
+
+    await coordinator._send_ping()
+
+    coordinator.session.post.assert_called_once()
+    _, kwargs = coordinator.session.post.call_args
+    assert kwargs["data"] == "1:2"
+
+
 async def test_ping_sender_disconnects_when_send_fails(coordinator):
     coordinator._connected = True
     coordinator._ping_interval = 0.01
