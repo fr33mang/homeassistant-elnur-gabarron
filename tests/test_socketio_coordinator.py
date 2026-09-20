@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 import time
 from unittest.mock import AsyncMock, MagicMock
 
@@ -249,3 +250,21 @@ async def test_handle_update_event_ignores_non_node_paths(coordinator):
     await coordinator._handle_update_event({"path": "/pmo/1/status", "body": {"power": 10}})
 
     assert coordinator.data[key]["status"] == {"mode": "off"}
+
+
+def test_log_skipped_node_stays_quiet_for_known_non_heater(coordinator, caplog):
+    # A power monitor next to the heaters is routine -- warning about it every
+    # startup would train the user to ignore the message that matters.
+    with caplog.at_level(logging.WARNING):
+        coordinator._log_skipped_node({"addr": 1, "name": "Power monitor", "type": "pmo"})
+
+    assert caplog.records == []
+
+
+def test_log_skipped_node_warns_with_type_for_unknown_node(coordinator, caplog):
+    with caplog.at_level(logging.WARNING):
+        coordinator._log_skipped_node({"addr": 9, "name": "Mystery", "type": "thm"})
+
+    assert len(caplog.records) == 1
+    # The type is the only thing that makes such a report actionable for us.
+    assert "thm" in caplog.records[0].getMessage()

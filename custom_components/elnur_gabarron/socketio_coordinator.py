@@ -145,6 +145,34 @@ class ElnurSocketIOCoordinator(DataUpdateCoordinator):
         factory_opts = node.get("setup", {}).get("factory_options", {})
         return bool(factory_opts.get("accumulator_power") or factory_opts.get("emitter_power"))
 
+    def _log_skipped_node(self, node: dict) -> None:
+        """Report a node that won't become entities, at a level that fits why.
+
+        A power monitor sitting next to the heaters is expected and routine, so
+        warning about it every time would train the user to ignore the message.
+        A node we genuinely don't recognise is worth surfacing, and the type is
+        included because it's the only thing that makes such a report actionable.
+        """
+        if node.get("type") in NON_HEATER_NODE_TYPES:
+            _LOGGER.debug(
+                "Skipping zone %s ('%s') on device %s — node type %s is not a heater",
+                node.get("addr"),
+                node.get("name", "unknown"),
+                self._device_id,
+                node.get("type"),
+            )
+            return
+
+        _LOGGER.warning(
+            "Skipping zone %s ('%s', type=%s) on device %s "
+            "— not a recognised heater node. "
+            "This device type is not supported yet.",
+            node.get("addr"),
+            node.get("name", "unknown"),
+            node.get("type", "unknown"),
+            self._device_id,
+        )
+
     async def _fetch_initial_data(self) -> dict[str, Any]:
         """Fetch initial device data via Socket.IO dev_data (synchronously)."""
         try:
@@ -200,15 +228,7 @@ class ElnurSocketIOCoordinator(DataUpdateCoordinator):
 
         for node in nodes:
             if not self._is_heater_zone(node):
-                _LOGGER.warning(
-                    "Skipping zone %s ('%s', type=%s) on device %s "
-                    "— not a recognised heater node. "
-                    "This device type is not supported yet.",
-                    node.get("addr"),
-                    node.get("name", "unknown"),
-                    node.get("type", "unknown"),
-                    self._device_id,
-                )
+                self._log_skipped_node(node)
                 continue
 
             zone_id = node.get("addr")
@@ -828,15 +848,7 @@ class ElnurSocketIOCoordinator(DataUpdateCoordinator):
             # Update coordinator data with full zone info
             for node in nodes:
                 if not self._is_heater_zone(node):
-                    _LOGGER.warning(
-                        "Skipping zone %s ('%s', type=%s) on device %s "
-                        "— not a recognised heater node. "
-                        "This device type is not supported yet.",
-                        node.get("addr"),
-                        node.get("name", "unknown"),
-                        node.get("type", "unknown"),
-                        self._device_id,
-                    )
+                    self._log_skipped_node(node)
                     continue
 
                 addr = node.get("addr")
