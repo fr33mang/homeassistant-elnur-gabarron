@@ -40,8 +40,13 @@ def _float_from_status(zone_data: dict[str, Any], key: str) -> float | None:
 
 
 def _get_priority(zone_data: dict[str, Any]) -> str | None:
+    # isinstance, not a bare truthiness check: this is the same server that
+    # sends numbers as strings and ints where booleans belong, and a priority
+    # arriving as an int would otherwise raise AttributeError out of a property
+    # Home Assistant calls on every state write. The neighbouring extractors
+    # already swallow a wrong type and return None; match them.
     priority = zone_data.get("setup", {}).get("priority")
-    return priority.capitalize() if priority else None
+    return priority.capitalize() if isinstance(priority, str) and priority else None
 
 
 def _get_firmware_version(zone_data: dict[str, Any]) -> str | None:

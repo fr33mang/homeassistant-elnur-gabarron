@@ -16,6 +16,7 @@ from custom_components.elnur_gabarron.sensor import (
     _get_charging_days,
     _get_charging_slot,
     _get_firmware_version,
+    _get_priority,
     _int_from_status,
     _minutes_to_time,
 )
@@ -275,3 +276,21 @@ async def test_async_setup_entry_recovers_device_id_from_the_zone_key():
     await async_setup_entry(hass, entry, lambda entities: added.extend(entities))
 
     assert all(e.unique_id.startswith(f"elnur_gabarron_{odd_device}_2_") for e in added)
+
+
+@pytest.mark.parametrize(
+    ("priority", "expected"),
+    [
+        ("medium", "Medium"),
+        ("HIGH", "High"),
+        ("", None),
+        (None, None),
+        (2, None),  # the server is known to send ints where strings are expected
+        (["medium"], None),
+    ],
+)
+def test_priority_tolerates_a_non_string(priority, expected):
+    # Unlike its neighbours, this extractor used to call .capitalize() on
+    # whatever arrived, so a numeric priority raised AttributeError out of
+    # native_value -- a property HA calls on every state write.
+    assert _get_priority({"setup": {"priority": priority}}) == expected
