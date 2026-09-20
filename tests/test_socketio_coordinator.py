@@ -192,14 +192,22 @@ async def test_ping_sender_disconnects_when_send_fails(coordinator):
 
 
 def test_is_heater_zone_accepts_known_heater_types(coordinator):
-    for node_type in ("acm", "htr", "htr_mod"):
+    for node_type in ("acm", "htr", "htr_mod", "towel_rail_heater"):
         assert coordinator._is_heater_zone({"type": node_type, "setup": {}}) is True
 
 
-def test_is_heater_zone_rejects_known_non_heater_type(coordinator):
-    # A power monitor has no factory_options either, but we want it skipped by
-    # type so the "unsupported device" warning stays meaningful.
-    assert coordinator._is_heater_zone({"type": "pmo", "setup": {}}) is False
+def test_is_heater_zone_rejects_known_non_heater_types(coordinator):
+    for node_type in ("pmo", "thm", "timer"):
+        assert coordinator._is_heater_zone({"type": node_type, "setup": {}}) is False
+
+
+def test_is_heater_zone_rejects_storage_tanks_despite_heater_factory_options(coordinator):
+    # A water/solar tank carries heater-shaped factory_options, so the old
+    # heuristic would have created a climate entity for it. It belongs on HA's
+    # water_heater platform, so getting it wrong is worse than skipping it.
+    for node_type in ("water_storage_heater", "solar_storage_heater"):
+        node = {"type": node_type, "setup": {"factory_options": {"accumulator_power": "1200"}}}
+        assert coordinator._is_heater_zone(node) is False
 
 
 def test_is_heater_zone_falls_back_to_factory_options_for_unknown_type(coordinator):
@@ -252,19 +260,30 @@ async def test_handle_update_event_ignores_non_node_paths(coordinator):
     assert coordinator.data[key]["status"] == {"mode": "off"}
 
 
-def test_log_skipped_node_stays_quiet_for_known_non_heater(coordinator, caplog):
-    # A power monitor next to the heaters is routine -- warning about it every
-    # startup would train the user to ignore the message that matters.
+def test_log_skipped_node_stays_quiet_for_known_non_heating_node(coordinator, caplog):
+    # A power monitor or thermostat next to the heaters is routine -- warning
+    # about it every startup would train the user to ignore what matters.
     with caplog.at_level(logging.WARNING):
-        coordinator._log_skipped_node({"addr": 1, "name": "Power monitor", "type": "pmo"})
+        for node_type in ("pmo", "thm", "timer"):
+            coordinator._log_skipped_node({"addr": 1, "name": "Not a zone", "type": node_type})
 
     assert caplog.records == []
 
 
+def test_log_skipped_node_warns_for_unsupported_tank(coordinator, caplog):
+    # This one does heat something, we just don't support it yet -- the user
+    # should hear about it rather than wonder where their tank went.
+    with caplog.at_level(logging.WARNING):
+        coordinator._log_skipped_node({"addr": 4, "name": "Tank", "type": "water_storage_heater"})
+
+    assert len(caplog.records) == 1
+    assert "water_storage_heater" in caplog.records[0].getMessage()
+
+
 def test_log_skipped_node_warns_with_type_for_unknown_node(coordinator, caplog):
     with caplog.at_level(logging.WARNING):
-        coordinator._log_skipped_node({"addr": 9, "name": "Mystery", "type": "thm"})
+        coordinator._log_skipped_node({"addr": 9, "name": "Mystery", "type": "who_knows"})
 
     assert len(caplog.records) == 1
     # The type is the only thing that makes such a report actionable for us.
-    assert "thm" in caplog.records[0].getMessage()
+    assert "who_knows" in caplog.records[0].getMessage()

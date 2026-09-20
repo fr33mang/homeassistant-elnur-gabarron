@@ -20,17 +20,31 @@ SOCKETIO_BASE_URL = "https://api-elnur.helki.com"
 SOCKETIO_PATH = "/socket.io/"
 SOCKETIO_NAMESPACE = "/api/v2/socket_io"
 
-# Node types in a dev_data payload that represent a controllable heater zone.
-# "acm" (accumulator) is the only one verified against a live device; "htr" and
-# "htr_mod" are the direct-emitter variants of the same Helki API family and are
-# accepted optimistically -- they would already pass the factory_options
-# heuristic below, so listing them here does not widen what we support.
-HEATER_NODE_TYPES = {"acm", "htr", "htr_mod"}
+# Node types taken from the NodeType enum in the official web client's bundle:
+#   acm, htr, htr_mod, towel_rail_heater, water_storage_heater,
+#   solar_storage_heater, pmo, thm, timer
+# Only "acm" has been seen on a live device; the rest come from that enum.
 
-# Node types known NOT to be heater zones, so they can be skipped quietly
-# instead of warning the user about an unsupported device. "pmo" is the power
-# monitor -- dev_data carries a matching "pmo_system" block alongside "nodes".
-NON_HEATER_NODE_TYPES = {"pmo"}
+# Heated room zones -- what this integration exposes as climate entities.
+HEATER_NODE_TYPES = {"acm", "htr", "htr_mod", "towel_rail_heater"}
+
+# Known node types that are not a room zone, so the factory_options fallback
+# below must not get a chance to guess at them. Water and solar storage tanks
+# are heaters and do carry heater-shaped factory_options, but they belong on
+# HA's water_heater platform rather than climate, so creating a thermostat for
+# one would be wrong rather than merely incomplete.
+NON_ZONE_NODE_TYPES = {
+    "pmo",
+    "thm",
+    "timer",
+    "water_storage_heater",
+    "solar_storage_heater",
+}
+
+# Of those, the ones that aren't heating anything at all. A power monitor or a
+# thermostat sitting next to the heaters is routine, so it's skipped quietly;
+# an unsupported tank is worth telling the user about.
+NON_HEATING_NODE_TYPES = {"pmo", "thm", "timer"}
 
 
 def parse_engineio_payload(data: bytes) -> list:
@@ -132,14 +146,15 @@ class ElnurSocketIOCoordinator(DataUpdateCoordinator):
 
         Prefers the node's own "type" discriminator, which is what the official
         web client keys off. Falls back to the original factory_options
-        heuristic for a type we have never seen, so an unknown-but-heater-shaped
-        node keeps working rather than silently disappearing.
+        heuristic only for a type that isn't in the vendor's enum at all, so an
+        unknown-but-heater-shaped node keeps working rather than silently
+        disappearing, while a known non-zone node is never guessed at.
         """
         node_type = node.get("type")
 
         if node_type in HEATER_NODE_TYPES:
             return True
-        if node_type in NON_HEATER_NODE_TYPES:
+        if node_type in NON_ZONE_NODE_TYPES:
             return False
 
         factory_opts = node.get("setup", {}).get("factory_options", {})
@@ -148,12 +163,13 @@ class ElnurSocketIOCoordinator(DataUpdateCoordinator):
     def _log_skipped_node(self, node: dict) -> None:
         """Report a node that won't become entities, at a level that fits why.
 
-        A power monitor sitting next to the heaters is expected and routine, so
-        warning about it every time would train the user to ignore the message.
-        A node we genuinely don't recognise is worth surfacing, and the type is
-        included because it's the only thing that makes such a report actionable.
+        A power monitor or thermostat sitting next to the heaters is expected and
+        routine, so warning about it every time would train the user to ignore
+        the message. A node that does heat something we don't support yet, or one
+        we don't recognise at all, is worth surfacing -- and the type is included
+        because it's the only thing that makes such a report actionable.
         """
-        if node.get("type") in NON_HEATER_NODE_TYPES:
+        if node.get("type") in NON_HEATING_NODE_TYPES:
             _LOGGER.debug(
                 "Skipping zone %s ('%s') on device %s — node type %s is not a heater",
                 node.get("addr"),
