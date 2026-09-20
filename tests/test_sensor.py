@@ -210,6 +210,22 @@ def test_sensor_unavailable_when_zone_drops_out_of_coordinator_data():
     assert sensor.available is False
 
 
+def test_sensor_unavailable_after_a_failed_update():
+    # The common case: Socket.IO drops, the coordinator marks the update
+    # failed, but the last zone dict is still sitting in .data. The entity has
+    # to go unavailable instead of presenting yesterday's temperature as
+    # current.
+    sensor = build_sensor(ZONE_OFF, "charge_level")
+    assert sensor.available is True
+
+    sensor.coordinator.last_update_success = False
+
+    assert sensor.available is False
+    # The stale value is still reachable -- availability is the only thing
+    # standing between it and the user.
+    assert sensor.native_value == 3
+
+
 def test_sensor_follows_zone_rename():
     sensor = build_sensor(ZONE_OFF, "charge_level")
     sensor.coordinator.data = {ZONE_KEY: {**ZONE_OFF, "name": "Renamed"}}

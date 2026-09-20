@@ -77,6 +77,17 @@ def test_unavailable_when_zone_drops_out_of_coordinator_data():
     assert sensor.available is False
 
 
+def test_unavailable_after_a_failed_update():
+    # Socket.IO dropping is the common case, and the stale zone dict survives
+    # in .data; availability is what keeps it off the dashboard.
+    sensor = build_binary_sensor(ZONE_OFF, "heating")
+    assert sensor.available is True
+
+    sensor.coordinator.last_update_success = False
+
+    assert sensor.available is False
+
+
 async def test_async_setup_entry_creates_every_binary_sensor_for_every_zone():
     from custom_components.elnur_gabarron.binary_sensor import async_setup_entry
     from custom_components.elnur_gabarron.const import DOMAIN
