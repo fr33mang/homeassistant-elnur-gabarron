@@ -104,7 +104,14 @@ class ElnurGabarronClimate(CoordinatorEntity, ClimateEntity):
         if self._optimistic_target_temp is not None:
             return self._optimistic_target_temp
 
+        # Switched off, the device reports a placeholder stemp ("3.0") that
+        # sits below min_temp; cards would render it as a live setpoint.
+        # Check the device's own mode too: right after turning on, the
+        # optimistic mode is already HEAT but stemp is still the placeholder.
         status = self.zone_data.get("status", {})
+        if self.hvac_mode == HVACMode.OFF or status.get("mode", "").lower() == "off":
+            return None
+
         # stemp = set temperature (target)
         temp_str = status.get("stemp")
         if temp_str:
@@ -113,6 +120,16 @@ class ElnurGabarronClimate(CoordinatorEntity, ClimateEntity):
             except (ValueError, TypeError):
                 return None
         return None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        status = self.zone_data.get("status", {})
+        # ice_temp = anti-frost temperature, configured on the device
+        try:
+            frost_temp = float(status["ice_temp"])
+        except (KeyError, ValueError, TypeError):
+            return {}
+        return {"frost_protection_temperature": frost_temp}
 
     @property
     def hvac_mode(self) -> HVACMode:
