@@ -24,10 +24,17 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
+      - name: Set up uv
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: requirements_test.txt
+          # Wheels differ per Python version; without a suffix both matrix
+          # jobs would race to save under the same key.
+          cache-suffix: py${{ matrix.python-version }}
+
       - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements_test.txt
+        run: uv pip install --system -r requirements_test.txt
 
       - name: Run tests with coverage
         run: |
