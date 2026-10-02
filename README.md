@@ -72,9 +72,10 @@ Each radiator zone appears as a **separate device** containing all its entities:
 
 ### Climate Entities (per zone)
 - Current temperature monitoring
-- Target temperature control (5-30°C)
+- Target temperature control (5-30°C); hidden while the zone is Off, since the heater has no setpoint then
 - HVAC modes (Heat/Auto/Off) — **Auto** follows the schedule programmed on the heater itself
 - HVAC actions (Heating/Idle/Off)
+- `frost_protection_temperature` attribute — the zone's anti-frost setpoint, mirroring the Anti-Frost Temperature control below
 
 <img width="380" height="385" alt="image" src="https://github.com/user-attachments/assets/8cf01a4d-4a1a-45a3-91d2-e33b07f166fc" />
 
