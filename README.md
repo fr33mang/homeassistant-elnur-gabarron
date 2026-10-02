@@ -1,170 +1,141 @@
 # Elnur Gabarron Integration for Home Assistant
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/custom-components/hacs)
-[![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue?logo=python&logoColor=white)](https://www.python.org/downloads/)
-[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
-[![Imports: isort](https://img.shields.io/badge/%20imports-isort-%231674b1?style=flat&labelColor=ef8336)](https://pycqa.github.io/isort/)
-[![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&logoColor=white)](https://github.com/pre-commit/pre-commit)
+[![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://hacs.xyz)
 [![Lint](https://github.com/fr33mang/homeassistant-elnur-gabarron/workflows/Lint/badge.svg)](https://github.com/fr33mang/homeassistant-elnur-gabarron/actions/workflows/lint.yaml)
 [![Tests](https://github.com/fr33mang/homeassistant-elnur-gabarron/workflows/Tests/badge.svg)](https://github.com/fr33mang/homeassistant-elnur-gabarron/actions/workflows/test.yaml)
 [![codecov](https://codecov.io/gh/fr33mang/homeassistant-elnur-gabarron/graph/badge.svg?token=2BMLJJGA4G)](https://codecov.io/gh/fr33mang/homeassistant-elnur-gabarron)
 [![Hassfest](https://github.com/fr33mang/homeassistant-elnur-gabarron/workflows/Validate%20with%20hassfest/badge.svg)](https://github.com/fr33mang/homeassistant-elnur-gabarron/actions/workflows/hassfest.yaml)
 [![HACS Validation](https://github.com/fr33mang/homeassistant-elnur-gabarron/workflows/HACS%20Validation/badge.svg)](https://github.com/fr33mang/homeassistant-elnur-gabarron/actions/workflows/hacs.yaml)
 
-Unofficial Home Assistant integration for Elnur Gabarron electric heaters based on reverse engineered API. Control your heaters using real-time Socket.IO updates.
+Unofficial Home Assistant integration for Elnur Gabarron electric heaters, built on the reverse-engineered API behind the official web app. State changes arrive in real time over Socket.IO.
 
-<img width="1386" height="574" alt="image" src="https://github.com/user-attachments/assets/e01af915-97be-4995-bc74-12f40847fb1f" />
-
+<img width="1386" height="574" alt="Elnur Gabarron heater zones in Home Assistant" src="https://github.com/user-attachments/assets/e01af915-97be-4995-bc74-12f40847fb1f" />
 
 ## Features
 
-- **Supports heater zones only** - storage heaters (`acm`), direct heaters (`htr`), modulating heaters (`htr_mod`) and towel rails. Water and solar storage tanks, power meters, thermostats and timers are recognised and skipped — I don't have that hardware to test against
-- **Real-time updates** - Instant synchronization via Socket.IO, upgraded to WebSocket transport when the server allows it (falls back to HTTP long-polling otherwise)
-- **Automatic device discovery** - Each radiator zone appears as a separate device
-- **Temperature control** - Set target temperature and view current temperature
-- **Multiple temperature presets** - Configure Eco, Comfort, and Anti-frost temperatures
-- **Power management** - Turn heaters on/off
-- **Comprehensive sensors** - Temperature, power, charge level, error codes, firmware
-- **Auto-reconnection** - Seamless recovery from connection issues
-- **Dynamic naming** - Device names sync from Elnur app
+- **Real-time updates** — changes made in the Elnur app or on the heater show up in Home Assistant immediately, and vice versa
+- **Automatic discovery** — every heater zone becomes its own device, named as in the Elnur app; the integration takes your home's name
+- **Climate control** — Heat (manual setpoint), Auto (the heater's own schedule) and Off
+- **Temperature presets** — Anti-frost, Economy and Comfort setpoints
+- **Diagnostics** — charge level, power draw, board temperature, error code, charging schedule, firmware
+
+## Supported Hardware
+
+Only storage heaters (`acm`) have been tested on a real device.
+
+Direct heaters (`htr`), modulating heaters (`htr_mod`) and towel rails are recognised and appear in Home Assistant, but control commands are always addressed as `acm`, so changing their mode or temperature probably won't work yet. If you have one, please [open an issue](https://github.com/fr33mang/homeassistant-elnur-gabarron/issues).
+
+Water and solar storage tanks, power meters, thermostats and timers are skipped.
 
 ## Installation
 
-### Option 0: HACS Button
+### HACS (recommended)
 
 [![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=fr33mang&repository=homeassistant-elnur-gabarron&category=integration)
 
-### Option 1: HACS (Recommended)
+Or add it by hand:
 
-1. Open HACS in Home Assistant
-2. Go to "Integrations"
-3. Click the three dots in the top right corner
-4. Select "Custom repositories"
-5. Add this repository URL and select "Integration" as the category
-6. Click "Install"
-7. Restart Home Assistant
-8. Go to **Settings** → **Devices & Services** → **Add Integration**
-9. Search for **"Elnur Gabarron"**
+1. In HACS, open the **⋮** menu (top right) → **Custom repositories**
+2. Add `https://github.com/fr33mang/homeassistant-elnur-gabarron` with type **Integration**
+3. Find **Elnur Gabarron Heaters** in HACS and click **Download**
+4. Restart Home Assistant
 
-### Option 2: Manual Installation
+### Manual
 
-1. Download or clone this repository
-2. Copy the `custom_components/elnur_gabarron` folder to your Home Assistant `config/custom_components/` directory
-3. Restart Home Assistant
-4. Go to **Settings** → **Devices & Services** → **Add Integration**
-5. Search for **"Elnur Gabarron"**
+1. Copy `custom_components/elnur_gabarron` from this repository into your Home Assistant `config/custom_components/` directory
+2. Restart Home Assistant
 
 ## Configuration
 
-After installation, configure the integration with your Elnur credentials:
+Go to **Settings** → **Devices & Services** → **Add Integration**, search for **Elnur Gabarron** and enter:
 
-- **Email**: Your Elnur account email
-- **Password**: Your Elnur account password
-- **Serial ID**: `7` (default)
+- **Email** and **Password** — your Elnur account, the same one used at https://remotecontrol.elnur.es
+- **Serial ID** — leave at `7` unless you know your account uses a different one
 
-## Devices & Entities
+## Entities
 
-### Integration Structure
-The integration displays as your home name from the Elnur API (e.g., "My Home").
+Each heater zone is a separate device with the entities below. No empty hub device is created.
 
-Each radiator zone appears as a **separate device** containing all its entities:
+### Climate
 
-### Climate Entities (per zone)
-- Current temperature monitoring
-- Target temperature control (5-30°C); hidden while the zone is Off, since the heater has no setpoint then
-- HVAC modes (Heat/Auto/Off) — **Auto** follows the schedule programmed on the heater itself
-- HVAC actions (Heating/Idle/Off)
-- `frost_protection_temperature` attribute — the zone's anti-frost setpoint, mirroring the Anti-Frost Temperature control below
+- Current temperature
+- Target temperature (5–30 °C); hidden while the zone is Off, since the heater has no setpoint then
+- HVAC modes: **Heat** (manual setpoint), **Auto** (follows the schedule programmed on the heater) and **Off**
+- HVAC action: Heating / Idle / Off
+- `frost_protection_temperature` attribute — the zone's anti-frost setpoint
 
-<img width="380" height="385" alt="image" src="https://github.com/user-attachments/assets/8cf01a4d-4a1a-45a3-91d2-e33b07f166fc" />
+<img width="380" height="385" alt="Climate card for a heater zone" src="https://github.com/user-attachments/assets/8cf01a4d-4a1a-45a3-91d2-e33b07f166fc" />
 
+### Temperature presets (Configuration)
 
-### Temperature Controls (Configuration Section, per zone)
-All three accept 7-30°C:
+All three accept 7–30 °C:
 
-- **Anti-Frost Temperature** - Freeze protection setpoint
-- **Economy Temperature** - Energy-saving mode setpoint
-- **Comfort Temperature** - Maximum comfort setpoint
+- **Anti-Frost Temperature** — freeze protection setpoint
+- **Economy Temperature** — energy-saving setpoint
+- **Comfort Temperature** — comfort setpoint
 
-<img width="261" height="234" alt="image" src="https://github.com/user-attachments/assets/db54a8a7-7234-4738-945a-5e8789110324" />
+<img width="261" height="234" alt="Temperature preset controls" src="https://github.com/user-attachments/assets/db54a8a7-7234-4738-945a-5e8789110324" />
 
+### Binary sensors
 
-### Binary Sensors (per zone)
-- **Heating** - Whether the heating element is active
-- **Charging** - Whether the heater is charging
-- **Window** - Window open detection
-- **Presence** - Presence detection
-- **True Radiant** - True radiant mode status
-- **Extra Energy** - Extra energy mode status
+- **Heating** — the heating element is on
+- **Charging** — the accumulator is charging
+- **Window** — open window detected
+- **Presence** — presence detected
+- **True Radiant** — True Radiant mode active
+- **Extra Energy** — extra energy mode active
 
-### Sensors (Diagnostic Section, per zone)
-- **Charge Level** - Accumulator charge percentage
-- **Power** - Current power consumption
-- **Target Charge** - Target charge percentage
-- **PCB Temperature** - Internal board temperature
-- **Priority** - Zone heating priority
-- **Error Code** - Device error status
-- **Firmware Version** - Installed firmware
-- **Charging Slot 1** / **Charging Slot 2** - Active charging periods
-- **Charging Days** - Days the charging schedule applies to
+### Sensors (Diagnostic)
 
-<img width="411" height="590" alt="image" src="https://github.com/user-attachments/assets/e5054f85-662e-4714-b30a-0b067c63c0af" />
+- **Charge Level** — accumulator charge, %
+- **Target Charge** — charge target, %
+- **Power** — current power draw
+- **PCB Temperature** — internal board temperature
+- **Priority** — zone heating priority
+- **Error Code** — device error status
+- **Firmware Version**
+- **Charging Slot 1** / **Charging Slot 2** — charging periods
+- **Charging Days** — days the charging schedule applies to
 
-
-Only the actual radiator zones appear as devices—no empty hub devices are created.
+<img width="411" height="590" alt="Diagnostic sensors for a heater zone" src="https://github.com/user-attachments/assets/e5054f85-662e-4714-b30a-0b067c63c0af" />
 
 ## How It Works
 
-### Startup Flow
-1. Authenticate via REST API
-2. Discover devices and zones (including home/group name)
-3. Update integration title to match your home name
-4. Connect to Socket.IO server (HTTP long-polling handshake, then upgrade to WebSocket)
-5. Request initial device data (`dev_data`)
-6. Create zone devices with proper names from Socket.IO
-7. Start real-time listener
+1. Logs in over the REST API (OAuth2; tokens are refreshed automatically)
+2. Discovers the hub, its zones and your home's name, and renames the integration entry to match
+3. Connects to the Socket.IO server and switches to WebSocket right after the handshake, as the official web app does, falling back to HTTP long-polling if the server offers no upgrade
+4. Requests the full device state (`dev_data`) and creates one device per zone
+5. Applies pushed updates as they arrive; the connection stays open indefinitely and reconnects only after an actual disconnect
 
-### Real-Time Updates
-- Server pushes updates instantly via Socket.IO
-- Status changes appear in HA immediately
-- Changes in Elnur app sync to HA in real-time
-- Changes in HA sync to Elnur app immediately
-- The connection upgrades from HTTP polling to WebSocket right after the handshake (mirroring the official web app), and falls back to polling if the server doesn't offer an upgrade
+Protocol details — ping direction and timing, packet framing, the upgrade sequence — are in [`docs/socketio-protocol.md`](docs/socketio-protocol.md).
+
+## Limitations
+
+- **One hub per config entry** — only the first hub on the account is set up; any others are ignored
+- **Storage heaters only** — see [Supported Hardware](#supported-hardware)
 
 ## Troubleshooting
 
 ### Authentication fails
-- Verify credentials work on https://remotecontrol.elnur.es
-- Check serial ID (usually `7`). You can check browser logs in dev console Network tab
-- Review Home Assistant logs
-- Check client_id and client_secret (they can be changed and need to be found in a browser history base64 encoded)
+
+- Check that the same email and password work at https://remotecontrol.elnur.es
+- Check the Serial ID (usually `7`): it's sent as the `x-serialid` header in the web app's requests, visible in the browser's developer tools, Network tab
+- Look for errors in the Home Assistant logs
+- The OAuth client ID and secret are built into the integration. If Elnur changes them, login will fail for everyone until the integration is updated — please [open an issue](https://github.com/fr33mang/homeassistant-elnur-gabarron/issues)
 
 ### No real-time updates
-- Check Socket.IO connection in logs
-- Verify no firewall blocking `api-elnur.helki.com` (including `wss://` for the WebSocket transport)
-- Protocol-level details (ping direction and timing, packet framing, upgrade
-  sequence) are documented in [`docs/socketio-protocol.md`](docs/socketio-protocol.md)
-- Occasional reconnection messages are normal; frequent ones (repeating faster than a few minutes apart) usually mean something's wrong — check for errors right before the reconnect
 
-## Support
+- Look for Socket.IO errors in the Home Assistant logs
+- Make sure nothing blocks `api-elnur.helki.com`, including `wss://` for the WebSocket transport
+- An occasional reconnect is normal. Reconnects every few minutes or more often mean something is wrong — check the errors logged just before them
 
-- **Official Elnur Gabarron Web App**: https://remotecontrol.elnur.es
-- **Elnur Website**: https://elnur.es
-- **GitHub Issues**: [Report a bug or request a feature](https://github.com/fr33mang/homeassistant-elnur-gabarron/issues)
+## Links
 
-## Notes
-
-- Integration automatically manages OAuth2 tokens
-- Socket.IO sessions run over WebSocket when the server supports it, falling back to HTTP long-polling otherwise
-- Engine.IO pings are client-initiated on this server (`EIO=3`): the integration sends a ping every `pingInterval` and expects a pong within `pingTimeout`, keeping the session alive indefinitely; auto-reconnection only kicks in on an actual disconnect
-- All credentials stored securely in Home Assistant config
-- Integration title and zone names update automatically from Elnur API/app
-- Multiple zones per device hub are fully supported
-- Each zone appears as a separate device in Home Assistant
-- Changes sync bidirectionally (HA ↔ Elnur app)
-- **One hub per config entry**: only the first device returned by the API is set up. If your account has more than one hub, the others are currently ignored
+- [Official Elnur web app](https://remotecontrol.elnur.es)
+- [Elnur website](https://elnur.es)
+- [Report a bug or request a feature](https://github.com/fr33mang/homeassistant-elnur-gabarron/issues)
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT — see [LICENSE](LICENSE).
