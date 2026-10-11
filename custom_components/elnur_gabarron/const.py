@@ -77,8 +77,7 @@ def iter_resolvable_zones(
 
     if zones and not resolved:
         raise ConfigEntryNotReady(
-            f"None of the {len(zones)} zone(s) reported by the coordinator could be "
-            "resolved to a device_id and zone_id"
+            f"None of the {len(zones)} zone(s) reported by the coordinator could be resolved to a device_id and zone_id"
         )
 
 
