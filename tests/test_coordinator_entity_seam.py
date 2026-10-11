@@ -73,7 +73,7 @@ def entity_coordinator(zones: dict) -> MagicMock:
         ("charging_days", "Every day"),
         ("temperature_offset", 0.0),
         ("power_level_limit", 3),
-        ("control_mode", 4),
+        ("control_mode", "PID"),
     ],
 )
 def test_sensor_reads_what_the_coordinator_actually_writes(parsed_zones, key, expected):

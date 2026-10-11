@@ -173,9 +173,8 @@ OFF_EXPECTATIONS = {
     "charging_days": "Every day",
     "temperature_offset": 0.0,  # sent as the string "0.0"
     "away_offset": 0.0,
-    "away_mode": 0,
     "power_level_limit": 3,
-    "control_mode": 4,
+    "control_mode": "PID",
 }
 
 
@@ -357,3 +356,11 @@ def test_priority_tolerates_a_non_string(priority, expected):
     # whatever arrived, so a numeric priority raised AttributeError out of
     # native_value -- a property HA calls on every state write.
     assert _get_priority({"setup": {"priority": priority}}) == expected
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"), [(0, "Hysteresis 0.2"), ("4", "PID"), (6, "PID 30"), (7, None), (-1, None)]
+)
+def test_control_mode_maps_the_index_to_its_label(raw, expected):
+    zone = {**ZONE_OFF, "setup": {**ZONE_OFF["setup"], "control_mode": raw}}
+    assert build_sensor(zone, "control_mode").native_value == expected
