@@ -9,8 +9,8 @@ non-zero `error_code` on a perfectly healthy idle heater.
 not been captured from a device, so treat its combination of flags as
 believable rather than authoritative.
 
-`ZONE_ALL_FLAGS_ON` is deliberately synthetic: every binary flag is true at
-once, which no real heater reports (window-open mode stops heating). It exists
+`ZONE_ALL_FLAGS_ON` is deliberately synthetic: every binary flag (status and
+setup) is true at once, which no real heater reports (window-open mode stops heating). It exists
 so the binary sensor tests can assert the true case for every key in one sweep
 — don't build behavioural tests on it.
 
@@ -125,4 +125,7 @@ ZONE_ALL_FLAGS_ON = _variant(
     presence=True,
     true_radiant_active=True,
     using_extra_nrg=True,
+    locked=1,  # int on the wire, like the real payload
+    venting=True,
 )
+ZONE_ALL_FLAGS_ON["setup"].update(window_mode_enabled=True, true_radiant_enabled=True)

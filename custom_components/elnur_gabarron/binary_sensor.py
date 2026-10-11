@@ -10,6 +10,7 @@ from homeassistant.components.binary_sensor import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -21,9 +22,12 @@ _LOGGER = logging.getLogger(__name__)
 
 @dataclass(frozen=True, kw_only=True)
 class ElnurBinarySensorEntityDescription(BinarySensorEntityDescription):
-    """Describes an Elnur Gabarron binary sensor with a status key."""
+    """Describes an Elnur Gabarron binary sensor read from one payload field."""
 
-    status_key: str
+    payload_key: str
+    # Which block of the zone payload the field lives in: "status" is what the
+    # heater is doing right now, "setup" is how it's configured.
+    section: str = "status"
 
 
 BINARY_SENSOR_DESCRIPTIONS: tuple[ElnurBinarySensorEntityDescription, ...] = (
@@ -31,37 +35,70 @@ BINARY_SENSOR_DESCRIPTIONS: tuple[ElnurBinarySensorEntityDescription, ...] = (
         key="heating",
         name="Heating",
         device_class=BinarySensorDeviceClass.HEAT,
-        status_key="heating",
+        payload_key="heating",
     ),
     ElnurBinarySensorEntityDescription(
         key="charging",
         name="Charging",
         device_class=BinarySensorDeviceClass.BATTERY_CHARGING,
-        status_key="charging",
+        payload_key="charging",
     ),
     ElnurBinarySensorEntityDescription(
         key="window_open",
         name="Window",
         device_class=BinarySensorDeviceClass.WINDOW,
-        status_key="window_open",
+        payload_key="window_open",
     ),
     ElnurBinarySensorEntityDescription(
         key="presence",
         name="Presence",
         device_class=BinarySensorDeviceClass.OCCUPANCY,
-        status_key="presence",
+        payload_key="presence",
     ),
     ElnurBinarySensorEntityDescription(
         key="true_radiant",
         name="True Radiant",
         icon="mdi:radiator",
-        status_key="true_radiant_active",
+        payload_key="true_radiant_active",
     ),
     ElnurBinarySensorEntityDescription(
         key="extra_energy",
         name="Extra Energy",
         icon="mdi:lightning-bolt-circle",
-        status_key="using_extra_nrg",
+        payload_key="using_extra_nrg",
+    ),
+    # Fields no entity used before. Diagnostic for now: what some of them mean
+    # in practice is still being worked out from their history.
+    ElnurBinarySensorEntityDescription(
+        key="child_lock",
+        name="Child Lock",
+        # Not BinarySensorDeviceClass.LOCK: that one reads "on" as unlocked.
+        icon="mdi:lock",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        payload_key="locked",
+    ),
+    ElnurBinarySensorEntityDescription(
+        key="venting",
+        name="Venting",
+        icon="mdi:fan",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        payload_key="venting",
+    ),
+    ElnurBinarySensorEntityDescription(
+        key="window_detection",
+        name="Window Detection",
+        icon="mdi:window-open-variant",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        section="setup",
+        payload_key="window_mode_enabled",
+    ),
+    ElnurBinarySensorEntityDescription(
+        key="true_radiant_enabled",
+        name="True Radiant Enabled",
+        icon="mdi:radiator",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        section="setup",
+        payload_key="true_radiant_enabled",
     ),
 )
 
@@ -150,4 +187,7 @@ class ElnurGabarronBinarySensor(ElnurGabarronBinarySensorBase):
 
     @property
     def is_on(self) -> bool | None:
-        return self.zone_data.get("status", {}).get(self.entity_description.status_key)
+        description = self.entity_description
+        value = self.zone_data.get(description.section, {}).get(description.payload_key)
+        # Coerced: the server sends `locked` as 0/1 next to real booleans.
+        return None if value is None else bool(value)

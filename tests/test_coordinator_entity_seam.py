@@ -71,6 +71,9 @@ def entity_coordinator(zones: dict) -> MagicMock:
         ("firmware", "FW: 1.4 / HW: 1.0"),
         ("charging_slot1", "00:00 - 08:00"),
         ("charging_days", "Every day"),
+        ("temperature_offset", 0.0),
+        ("power_level_limit", 3),
+        ("control_mode", 4),
     ],
 )
 def test_sensor_reads_what_the_coordinator_actually_writes(parsed_zones, key, expected):
@@ -93,8 +96,9 @@ def test_binary_sensor_reads_what_the_coordinator_actually_writes(parsed_zones, 
         entity_coordinator(parsed_zones), zone_key, DEVICE_ID, ZONE_ID, zone["name"], BINARY_SENSORS[key]
     )
 
-    # False, not None: None would mean the entity couldn't find the field at all.
-    assert sensor.is_on is False
+    # A bool, not None: None would mean the entity couldn't find the field at
+    # all. True Radiant is the one setting enabled on this heater.
+    assert sensor.is_on is (key == "true_radiant_enabled")
 
 
 def test_zone_key_the_coordinator_builds_is_the_one_entities_are_set_up_with(parsed_zones):
