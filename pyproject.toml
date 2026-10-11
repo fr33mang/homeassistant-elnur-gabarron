@@ -1,11 +1,15 @@
 [tool.ruff]
 line-length = 120
-target-version = "py312"
+# The oldest Python the code must still run on, not the one CI tests (3.14).
+# At py314 ruff-format rewrites `except (A, B):` to the 3.14-only unparenthesized
+# form, which would stop the integration loading on a Python 3.13 install.
+target-version = "py313"
 
 [tool.ruff.lint]
-# Pinned explicitly rather than relying on ruff's defaults, which have grown
-# beyond this between releases: pyflakes, the uncontroversial pycodestyle
-# errors, and import sorting -- what black + isort covered before.
+# What black + isort covered before: pyflakes, the uncontroversial pycodestyle
+# errors, and import sorting. Listed explicitly so the switch to ruff doesn't
+# also change lint policy -- ruff's own defaults include more (UP, BLE, SIM...),
+# which would be worth adopting on purpose rather than by accident.
 select = ["E4", "E7", "E9", "F", "I"]
 
 [tool.pytest.ini_options]
