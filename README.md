@@ -130,6 +130,16 @@ Protocol details — ping direction and timing, packet framing, the upgrade sequ
 - Make sure nothing blocks `api-elnur.helki.com`, including `wss://` for the WebSocket transport
 - An occasional reconnect is normal. Reconnects every few minutes or more often mean something is wrong — check the errors logged just before them
 
+### Logging fields without entities
+
+The hub reports some fields that no entity uses yet: whether the hub is connected, away mode, child lock, venting, and a few per-zone settings. To help work out what they mean on real hardware, the integration can log each one when it first appears and every time it changes. It also logs, once each, the paths of any updates it ignores. It never logs their contents. To turn this on, add to `configuration.yaml`:
+
+```yaml
+logger:
+  logs:
+    custom_components.elnur_gabarron.socketio_coordinator.unused_fields: info
+```
+
 ## Links
 
 - [Official Elnur web app](https://remotecontrol.elnur.es)

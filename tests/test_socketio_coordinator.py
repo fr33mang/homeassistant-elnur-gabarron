@@ -318,3 +318,56 @@ def test_parse_dev_data_message_skips_a_heater_node_without_addr(coordinator):
 
     assert set(result) == {f"{DEVICE_ID}_zone2"}
     assert not any("None" in key for key in result)
+
+
+# ---------------------------------------------------------------------------
+# Unused dev_data fields -- logged on first sight and on change so their
+# real-world behaviour can be studied before giving them entities.
+# ---------------------------------------------------------------------------
+
+UNUSED_LOGGER = "custom_components.elnur_gabarron.socketio_coordinator.unused_fields"
+
+
+def _unused_messages(caplog) -> list[str]:
+    return [r.getMessage() for r in caplog.records if r.name == UNUSED_LOGGER]
+
+
+def test_dev_data_logs_unused_fields_once_until_they_change(coordinator, caplog):
+    node = {**HEATER_NODE, "type": "acm", "status": {"mode": "auto", "locked": 0}, "setup": {"away_mode": 0}}
+    payload = {"connected": True, "geoData": {"lat": 1.0}, "nodes": [node]}
+    msg = f'42/api/v2/socket_io,["dev_data",{json.dumps(payload)}]'
+
+    with caplog.at_level(logging.INFO, logger=UNUSED_LOGGER):
+        coordinator._parse_dev_data_message(msg)
+        coordinator._parse_dev_data_message(msg)
+
+    assert _unused_messages(caplog) == [
+        "connected initial value: True",
+        "zone 2 status.locked initial value: 0",
+        "zone 2 setup.away_mode initial value: 0",
+    ]
+
+
+async def test_update_event_logs_a_changed_unused_field(coordinator, caplog):
+    with caplog.at_level(logging.INFO, logger=UNUSED_LOGGER):
+        coordinator._track_unused_field("zone 2 status.locked", 0)
+        caplog.clear()
+        await coordinator._handle_update_event({"path": "/acm/2/status", "body": {"mode": "auto", "locked": 1}})
+        await coordinator._handle_update_event({"path": "/connected", "body": False})
+
+    assert _unused_messages(caplog) == [
+        "zone 2 status.locked changed: 0 -> 1",
+        "connected initial value: False",
+    ]
+
+
+async def test_unhandled_update_path_is_logged_once_without_its_body(coordinator, caplog):
+    with caplog.at_level(logging.INFO, logger=UNUSED_LOGGER):
+        for _ in range(2):
+            await coordinator._handle_update_event({"path": "/acm/2/prog", "body": {"secret": "schedule"}})
+            await coordinator._handle_update_event({"path": "/pmo/1/status", "body": {"power": 10}})
+
+    assert _unused_messages(caplog) == [
+        "Unhandled update path: /acm/2/prog",
+        "Unhandled update path: /pmo/1/status",
+    ]

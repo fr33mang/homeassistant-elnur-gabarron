@@ -15,6 +15,33 @@ from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
+# dev_data fields that no entity reads yet. Each one is logged when it is first
+# seen and whenever it changes, so how it behaves on a real installation can be
+# studied before deciding what entity (if any) it deserves. A child logger so it
+# can be switched on by itself without the rest of the debug output:
+#   logger:
+#     logs:
+#       custom_components.elnur_gabarron.socketio_coordinator.unused_fields: info
+_UNUSED_LOGGER = logging.getLogger(f"{__name__}.unused_fields")
+
+# Top-level dev_data keys. geoData/geo_data is deliberately left out: it holds
+# the home's coordinates, which have no business in a log someone might paste.
+UNUSED_DEV_DATA_KEYS = ("connected", "away_status", "htr_system", "pmo_system", "discovery")
+
+# Per-zone keys, by the section of the node they live in.
+UNUSED_NODE_KEYS = {
+    "status": ("locked", "venting"),
+    "setup": (
+        "away_mode",
+        "away_offset",
+        "window_mode_enabled",
+        "true_radiant_enabled",
+        "power_level_limit",
+        "offset",
+        "control_mode",
+    ),
+}
+
 # Socket.IO configuration
 SOCKETIO_BASE_URL = "https://api-elnur.helki.com"
 SOCKETIO_PATH = "/socket.io/"
@@ -112,6 +139,8 @@ class ElnurSocketIOCoordinator(DataUpdateCoordinator):
         self._ping_timeout: float = 60.0
         self._ping_task: asyncio.Task | None = None
         self._last_pong_time: float = 0
+        self._unused_field_values: dict[str, Any] = {}
+        self._seen_unhandled_update_paths: set[str] = set()
 
     @property
     def group_name(self) -> str | None:
@@ -188,6 +217,46 @@ class ElnurSocketIOCoordinator(DataUpdateCoordinator):
             self._device_id,
         )
 
+    def _track_unused_field(self, name: str, value: Any) -> None:
+        """Log an unused dev_data field the first time it's seen and on every change."""
+        if name in self._unused_field_values and self._unused_field_values[name] == value:
+            return
+        if name in self._unused_field_values:
+            _UNUSED_LOGGER.info("%s changed: %r -> %r", name, self._unused_field_values[name], value)
+        else:
+            _UNUSED_LOGGER.info("%s initial value: %r", name, value)
+        self._unused_field_values[name] = value
+
+    def _track_unused_node_section(self, zone_id: Any, section: str, body: Any) -> None:
+        """Track the unused keys of one node section ("status" or "setup")."""
+        if not isinstance(body, dict):
+            return
+        for key in UNUSED_NODE_KEYS.get(section, ()):
+            if key in body:
+                self._track_unused_field(f"zone {zone_id} {section}.{key}", body[key])
+
+    def _log_unhandled_update_path(self, path: str) -> None:
+        """Log, once per path, an update event nothing applies.
+
+        The path only, never the body: it could be anything, including the
+        weekly schedule, which is a record of when someone is at home.
+        """
+        if path in self._seen_unhandled_update_paths:
+            return
+        self._seen_unhandled_update_paths.add(path)
+        _UNUSED_LOGGER.info("Unhandled update path: %s", path)
+
+    def _track_unused_dev_data(self, payload: dict[str, Any]) -> None:
+        """Track every unused field carried by a full dev_data payload."""
+        for key in UNUSED_DEV_DATA_KEYS:
+            if key in payload:
+                self._track_unused_field(key, payload[key])
+        for node in payload.get("nodes", []):
+            if not self._is_heater_zone(node) or node.get("addr") is None:
+                continue
+            for section in UNUSED_NODE_KEYS:
+                self._track_unused_node_section(node["addr"], section, node.get(section))
+
     async def _fetch_initial_data(self) -> dict[str, Any]:
         """Fetch initial device data via Socket.IO dev_data (synchronously)."""
         try:
@@ -238,6 +307,7 @@ class ElnurSocketIOCoordinator(DataUpdateCoordinator):
         if not (isinstance(data_obj, list) and data_obj[0] == "dev_data"):
             return None
 
+        self._track_unused_dev_data(data_obj[1])
         nodes = data_obj[1].get("nodes", [])
         device_data: dict[str, Any] = {}
 
@@ -826,6 +896,9 @@ class ElnurSocketIOCoordinator(DataUpdateCoordinator):
             if len(parts) >= 3 and parts[1] in HEATER_NODE_TYPES:
                 zone_id = int(parts[2])
                 update_type = parts[3] if len(parts) > 3 else "status"
+                self._track_unused_node_section(zone_id, update_type, body)
+                if update_type not in ("status", "setup"):
+                    self._log_unhandled_update_path(path)
 
                 # Update coordinator data for this zone
                 if self._device_id:
@@ -842,6 +915,10 @@ class ElnurSocketIOCoordinator(DataUpdateCoordinator):
                         # Notify listeners (copy-on-write)
                         self.async_set_updated_data(new_data)
                         _LOGGER.debug("Updated %s %s", unique_key, update_type)
+            elif len(parts) == 2 and parts[1] in UNUSED_DEV_DATA_KEYS:
+                self._track_unused_field(parts[1], body)
+            else:
+                self._log_unhandled_update_path(path)
 
         except Exception as err:
             _LOGGER.error("Failed to handle update event: %s", err)
@@ -849,6 +926,7 @@ class ElnurSocketIOCoordinator(DataUpdateCoordinator):
     async def _handle_dev_data_event(self, payload: dict[str, Any]) -> None:
         """Handle full device data event."""
         try:
+            self._track_unused_dev_data(payload)
             nodes = payload.get("nodes", [])
             if not nodes:
                 return
