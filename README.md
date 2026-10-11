@@ -103,7 +103,8 @@ All three accept 7–30 °C:
 - **Charging Days** — days the charging schedule applies to
 - **Temperature Offset** — the zone's temperature offset setting, °C
 - **Away Offset** — setpoint offset in away mode, °C
-- **Away Mode**, **Power Level Limit**, **Control Mode** — raw setup values as the heater reports them; what each number means hasn't been worked out yet
+- **Power Level Limit** — the heater's power level limit setting (1–255), as the heater reports it
+- **Control Mode** — thermostat regulation algorithm: PID or hysteresis
 
 <img width="411" height="590" alt="Diagnostic sensors for a heater zone" src="https://github.com/user-attachments/assets/e5054f85-662e-4714-b30a-0b067c63c0af" />
 

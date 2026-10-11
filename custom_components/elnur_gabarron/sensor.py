@@ -68,6 +68,26 @@ def _get_firmware_version(zone_data: dict[str, Any]) -> str | None:
     return None
 
 
+# setup.control_mode is an index into this list, in the order the official web
+# client's HeatingNodeController uses (Elnur storage heaters inherit it).
+CONTROL_MODES = (
+    "Hysteresis 0.2",
+    "Hysteresis 0.3",
+    "Hysteresis 0.5",
+    "Hysteresis 0.7",
+    "PID",
+    "PID 15",
+    "PID 30",
+)
+
+
+def _get_control_mode(zone_data: dict[str, Any]) -> str | None:
+    index = _int_from_setup(zone_data, "control_mode")
+    if index is None or not 0 <= index < len(CONTROL_MODES):
+        return None
+    return CONTROL_MODES[index]
+
+
 def _minutes_to_time(minutes: int) -> str:
     return f"{minutes // 60:02d}:{minutes % 60:02d}"
 
@@ -181,9 +201,7 @@ SENSOR_DESCRIPTIONS: tuple[ElnurSensorEntityDescription, ...] = (
         icon="mdi:calendar-week",
         value_fn=_get_charging_days,
     ),
-    # Setup fields no entity used before. Diagnostic and raw for now: what the
-    # numbers in the last three mean is still being worked out from their
-    # history, so they aren't dressed up as anything more specific yet.
+    # Setup fields no entity used before, kept diagnostic.
     ElnurSensorEntityDescription(
         key="temperature_offset",
         name="Temperature Offset",
@@ -203,13 +221,6 @@ SENSOR_DESCRIPTIONS: tuple[ElnurSensorEntityDescription, ...] = (
         value_fn=lambda d: _float_from_setup(d, "away_offset"),
     ),
     ElnurSensorEntityDescription(
-        key="away_mode",
-        name="Away Mode",
-        icon="mdi:home-export-outline",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda d: _int_from_setup(d, "away_mode"),
-    ),
-    ElnurSensorEntityDescription(
         key="power_level_limit",
         name="Power Level Limit",
         icon="mdi:speedometer-medium",
@@ -220,8 +231,10 @@ SENSOR_DESCRIPTIONS: tuple[ElnurSensorEntityDescription, ...] = (
         key="control_mode",
         name="Control Mode",
         icon="mdi:tune-variant",
+        device_class=SensorDeviceClass.ENUM,
+        options=list(CONTROL_MODES),
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda d: _int_from_setup(d, "control_mode"),
+        value_fn=_get_control_mode,
     ),
 )
 
