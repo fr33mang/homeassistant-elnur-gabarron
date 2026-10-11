@@ -1,27 +1,12 @@
-[tool.black]
+[tool.ruff]
 line-length = 120
-target-version = ['py312']
-include = '\.pyi?$'
-extend-exclude = '''
-/(
-  # directories
-  \.eggs
-  | \.git
-  | \.hg
-  | \.mypy_cache
-  | \.tox
-  | \.venv
-  | venv
-  | _build
-  | buck-out
-  | build
-  | dist
-)/
-'''
+target-version = "py312"
 
-[tool.isort]
-profile = "black"
-line_length = 120
+[tool.ruff.lint]
+# Pinned explicitly rather than relying on ruff's defaults, which have grown
+# beyond this between releases: pyflakes, the uncontroversial pycodestyle
+# errors, and import sorting -- what black + isort covered before.
+select = ["E4", "E7", "E9", "F", "I"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

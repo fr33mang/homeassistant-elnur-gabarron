@@ -36,7 +36,7 @@ def dev_data_frame() -> str:
         "version": ZONE_OFF["version"],
     }
     payload = {"nodes": [node]}
-    return f'42{SOCKETIO_NAMESPACE},{json.dumps(["dev_data", payload])}'
+    return f"42{SOCKETIO_NAMESPACE},{json.dumps(['dev_data', payload])}"
 
 
 @pytest.fixture
