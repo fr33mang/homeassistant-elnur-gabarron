@@ -23,9 +23,14 @@ def build_binary_sensor(zone: dict, key: str) -> ElnurGabarronBinarySensor:
 ALL_KEYS = list(DESCRIPTIONS)
 
 
+# What every binary sensor reports for the real ZONE_OFF payload. Everything
+# that describes activity is off; True Radiant is a setting, and it's enabled.
+OFF_EXPECTATIONS = {key: False for key in DESCRIPTIONS} | {"true_radiant_enabled": True}
+
+
 @pytest.mark.parametrize("key", ALL_KEYS, ids=str)
-def test_all_off_on_an_idle_heater(key):
-    assert build_binary_sensor(ZONE_OFF, key).is_on is False
+def test_values_on_an_idle_heater(key):
+    assert build_binary_sensor(ZONE_OFF, key).is_on is OFF_EXPECTATIONS[key]
 
 
 @pytest.mark.parametrize("key", ALL_KEYS, ids=str)
@@ -34,25 +39,29 @@ def test_all_on_when_the_payload_says_so(key):
 
 
 @pytest.mark.parametrize("key", ALL_KEYS, ids=str)
-def test_unknown_when_status_key_is_absent(key):
-    # A partial status payload should leave the entity unknown rather than
-    # silently reporting "off", which would look like real information.
-    zone = {**ZONE_OFF, "status": {}}
+def test_unknown_when_payload_key_is_absent(key):
+    # A partial payload should leave the entity unknown rather than silently
+    # reporting "off", which would look like real information.
+    zone = {**ZONE_OFF, DESCRIPTIONS[key].section: {}}
     assert build_binary_sensor(zone, key).is_on is None
 
 
-def test_each_description_maps_to_a_distinct_status_key():
-    status_keys = [d.status_key for d in BINARY_SENSOR_DESCRIPTIONS]
-    assert len(status_keys) == len(set(status_keys))
+def test_each_description_maps_to_a_distinct_payload_field():
+    fields = [(d.section, d.payload_key) for d in BINARY_SENSOR_DESCRIPTIONS]
+    assert len(fields) == len(set(fields))
 
 
-EXPECTED_STATUS_KEYS = {
-    "heating": "heating",
-    "charging": "charging",
-    "window_open": "window_open",
-    "presence": "presence",
-    "true_radiant": "true_radiant_active",
-    "extra_energy": "using_extra_nrg",
+EXPECTED_FIELDS = {
+    "heating": ("status", "heating"),
+    "charging": ("status", "charging"),
+    "window_open": ("status", "window_open"),
+    "presence": ("status", "presence"),
+    "true_radiant": ("status", "true_radiant_active"),
+    "extra_energy": ("status", "using_extra_nrg"),
+    "child_lock": ("status", "locked"),
+    "venting": ("status", "venting"),
+    "window_detection": ("setup", "window_mode_enabled"),
+    "true_radiant_enabled": ("setup", "true_radiant_enabled"),
 }
 
 
@@ -60,8 +69,9 @@ EXPECTED_STATUS_KEYS = {
 def test_entity_key_maps_to_the_expected_payload_field(key):
     # The entity key and the wire field differ for half of these; pin the
     # mapping so a rename on either side can't silently cross the wires.
-    assert key in EXPECTED_STATUS_KEYS, f"binary sensor {key!r} has no expected status key"
-    assert DESCRIPTIONS[key].status_key == EXPECTED_STATUS_KEYS[key]
+    assert key in EXPECTED_FIELDS, f"binary sensor {key!r} has no expected payload field"
+    description = DESCRIPTIONS[key]
+    assert (description.section, description.payload_key) == EXPECTED_FIELDS[key]
 
 
 def test_unique_id_is_stable():
@@ -107,17 +117,13 @@ async def test_async_setup_entry_creates_every_binary_sensor_for_every_zone():
     assert len({e.unique_id for e in added}) == len(added)
 
 
-def test_is_on_does_not_coerce_the_payload_value():
-    # is_on is typed bool | None but returns whatever the payload holds. The
-    # server sends real booleans for these six keys today (it uses ints
-    # elsewhere, e.g. `locked`), so nothing is broken -- but if that ever
-    # changes, HA would get an int where it expects a bool. Pinned so the
-    # change is visible rather than silent.
-    zone = {**ZONE_OFF, "status": {**ZONE_OFF["status"], "heating": 1}}
+def test_is_on_coerces_an_int_flag_to_bool():
+    # The server sends `locked` as 0/1 next to genuine booleans; HA expects
+    # is_on to be a bool.
+    zone = {**ZONE_OFF, "status": {**ZONE_OFF["status"], "locked": 1}}
 
-    # Asserted loosely on purpose: when is_on starts coercing to bool, this
-    # should keep passing rather than reading as a regression from the fix.
-    assert build_binary_sensor(zone, "heating").is_on == 1
+    assert build_binary_sensor(zone, "child_lock").is_on is True
+    assert build_binary_sensor(ZONE_OFF, "child_lock").is_on is False
 
 
 def test_follows_zone_rename():

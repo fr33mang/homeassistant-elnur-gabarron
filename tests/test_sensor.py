@@ -171,6 +171,11 @@ OFF_EXPECTATIONS = {
     "charging_slot1": "00:00 - 08:00",
     "charging_slot2": "Disabled",
     "charging_days": "Every day",
+    "temperature_offset": 0.0,  # sent as the string "0.0"
+    "away_offset": 0.0,
+    "away_mode": 0,
+    "power_level_limit": 3,
+    "control_mode": 4,
 }
 
 

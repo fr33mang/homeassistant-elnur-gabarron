@@ -19,24 +19,30 @@ from .socketio_coordinator import ElnurSocketIOCoordinator
 _LOGGER = logging.getLogger(__name__)
 
 
-def _int_from_status(zone_data: dict[str, Any], key: str) -> int | None:
-    val = zone_data.get("status", {}).get(key)
+def _number_from(zone_data: dict[str, Any], section: str, key: str, cast: Callable[[Any], StateType]) -> StateType:
+    val = zone_data.get(section, {}).get(key)
     if val is not None:
         try:
-            return int(val)
+            return cast(val)
         except (ValueError, TypeError):
             return None
     return None
+
+
+def _int_from_status(zone_data: dict[str, Any], key: str) -> int | None:
+    return _number_from(zone_data, "status", key, int)
 
 
 def _float_from_status(zone_data: dict[str, Any], key: str) -> float | None:
-    val = zone_data.get("status", {}).get(key)
-    if val is not None:
-        try:
-            return float(val)
-        except (ValueError, TypeError):
-            return None
-    return None
+    return _number_from(zone_data, "status", key, float)
+
+
+def _int_from_setup(zone_data: dict[str, Any], key: str) -> int | None:
+    return _number_from(zone_data, "setup", key, int)
+
+
+def _float_from_setup(zone_data: dict[str, Any], key: str) -> float | None:
+    return _number_from(zone_data, "setup", key, float)
 
 
 def _get_priority(zone_data: dict[str, Any]) -> str | None:
@@ -174,6 +180,48 @@ SENSOR_DESCRIPTIONS: tuple[ElnurSensorEntityDescription, ...] = (
         name="Charging Days",
         icon="mdi:calendar-week",
         value_fn=_get_charging_days,
+    ),
+    # Setup fields no entity used before. Diagnostic and raw for now: what the
+    # numbers in the last three mean is still being worked out from their
+    # history, so they aren't dressed up as anything more specific yet.
+    ElnurSensorEntityDescription(
+        key="temperature_offset",
+        name="Temperature Offset",
+        # No device class: this is a delta, and the temperature class would
+        # convert it as an absolute reading for Fahrenheit users.
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        icon="mdi:thermometer-plus",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda d: _float_from_setup(d, "offset"),
+    ),
+    ElnurSensorEntityDescription(
+        key="away_offset",
+        name="Away Offset",
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        icon="mdi:thermometer-minus",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda d: _float_from_setup(d, "away_offset"),
+    ),
+    ElnurSensorEntityDescription(
+        key="away_mode",
+        name="Away Mode",
+        icon="mdi:home-export-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda d: _int_from_setup(d, "away_mode"),
+    ),
+    ElnurSensorEntityDescription(
+        key="power_level_limit",
+        name="Power Level Limit",
+        icon="mdi:speedometer-medium",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda d: _int_from_setup(d, "power_level_limit"),
+    ),
+    ElnurSensorEntityDescription(
+        key="control_mode",
+        name="Control Mode",
+        icon="mdi:tune-variant",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda d: _int_from_setup(d, "control_mode"),
     ),
 )
 

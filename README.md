@@ -85,6 +85,10 @@ All three accept 7–30 °C:
 - **Presence** — presence detected
 - **True Radiant** — True Radiant mode active
 - **Extra Energy** — extra energy mode active
+- **Child Lock** *(diagnostic)* — the heater's buttons are locked
+- **Venting** *(diagnostic)* — venting active
+- **Window Detection** *(diagnostic)* — open-window detection is enabled (whether it's triggered is **Window**)
+- **True Radiant Enabled** *(diagnostic)* — True Radiant is enabled (whether it's active is **True Radiant**)
 
 ### Sensors (Diagnostic)
 
@@ -97,6 +101,9 @@ All three accept 7–30 °C:
 - **Firmware Version**
 - **Charging Slot 1** / **Charging Slot 2** — charging periods
 - **Charging Days** — days the charging schedule applies to
+- **Temperature Offset** — the zone's temperature offset setting, °C
+- **Away Offset** — setpoint offset in away mode, °C
+- **Away Mode**, **Power Level Limit**, **Control Mode** — raw setup values as the heater reports them; what each number means hasn't been worked out yet
 
 <img width="411" height="590" alt="Diagnostic sensors for a heater zone" src="https://github.com/user-attachments/assets/e5054f85-662e-4714-b30a-0b067c63c0af" />
 
