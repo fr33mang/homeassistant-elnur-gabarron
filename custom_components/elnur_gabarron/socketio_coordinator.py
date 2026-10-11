@@ -107,7 +107,6 @@ class ElnurSocketIOCoordinator(DataUpdateCoordinator):
         self._connected = False
         self._listener_task: asyncio.Task | None = None
         self._reconnect_count = 0
-        self._consecutive_connection_failures = 0
         self._ws: aiohttp.ClientWebSocketResponse | None = None
         self._ping_interval: float = 25.0
         self._ping_timeout: float = 60.0
@@ -491,10 +490,9 @@ class ElnurSocketIOCoordinator(DataUpdateCoordinator):
                 connected = await self._connect_socketio()
                 if not connected:
                     self._reconnect_count += 1
-                    self._consecutive_connection_failures += 1
                     _LOGGER.warning(
                         "Socket.IO connection failed (failure #%s), retrying in %ss",
-                        self._consecutive_connection_failures,
+                        self._reconnect_count,
                         reconnect_delay,
                     )
 
@@ -505,7 +503,6 @@ class ElnurSocketIOCoordinator(DataUpdateCoordinator):
 
                 # Reset on successful connection
                 self._reconnect_count = 0
-                self._consecutive_connection_failures = 0
                 reconnect_delay = 5
 
                 await self._run_with_ping(self._websocket_loop() if self._ws is not None else self._polling_loop())
@@ -613,7 +610,10 @@ class ElnurSocketIOCoordinator(DataUpdateCoordinator):
             try:
                 await self._ws.close()
             except Exception:
-                pass
+                # Already reconnecting either way, so this must not stop us,
+                # but a socket that won't close is exactly what you want to
+                # see when debugging a stuck connection.
+                _LOGGER.debug("Error closing WebSocket for reconnect", exc_info=True)
 
     async def _polling_loop(self) -> None:
         """Read loop while connected via the Engine.IO polling transport.
@@ -623,7 +623,6 @@ class ElnurSocketIOCoordinator(DataUpdateCoordinator):
         than the server itself expects to hear from us.
         """
         last_activity = time.monotonic()
-        poll_count = 0
 
         token = await self.api.async_get_access_token()
         params = {
@@ -640,7 +639,6 @@ class ElnurSocketIOCoordinator(DataUpdateCoordinator):
 
         while self._connected:
             try:
-                poll_count += 1
                 current_time = time.monotonic()
 
                 # No "quiet for N minutes" watchdog here: a pong (or any other
@@ -654,18 +652,6 @@ class ElnurSocketIOCoordinator(DataUpdateCoordinator):
                     _LOGGER.info("Session idle for %ss, reconnecting...", int(elapsed))
                     self._connected = False
                     break
-
-                # Periodic dev_data re-request as a data freshness safety net.
-                # Not a real keepalive any more -- _ping_sender already keeps
-                # the session itself alive -- and "every 300 polls" no longer
-                # means "every 30s" now that each poll can block for up to
-                # pingInterval (not a fixed 0.1s), but it's cheap insurance
-                # against missing an update on this fallback path.
-                if poll_count % 300 == 0:
-                    _LOGGER.debug("Sending periodic dev_data keepalive...")
-                    dev_data_event = f'42{SOCKETIO_NAMESPACE},["dev_data"]'
-                    dev_data_packet = f"{len(dev_data_event)}:{dev_data_event}"
-                    await self.session.post(f"{base_url}&t={time.time_ns()}", data=dev_data_packet)
 
                 # Poll for messages, cache-busted like the official client to
                 # avoid a proxy/CDN serving a stale response for this GET
@@ -706,14 +692,12 @@ class ElnurSocketIOCoordinator(DataUpdateCoordinator):
 
                             # Handle Socket.IO events (actual data updates)
                             if msg.startswith("42"):
-                                self._consecutive_connection_failures = 0  # Reset failure counter on successful data
                                 await self._handle_socketio_event(msg)
                     elif resp.status >= 400:
                         _LOGGER.warning(
                             "Socket.IO poll returned HTTP %s, reconnecting...",
                             resp.status,
                         )
-                        self._consecutive_connection_failures += 1
                         self._connected = False
                         break
 
@@ -787,7 +771,6 @@ class ElnurSocketIOCoordinator(DataUpdateCoordinator):
 
                 # Handle Socket.IO events (actual data updates)
                 if data.startswith("42"):
-                    self._consecutive_connection_failures = 0
                     await self._handle_socketio_event(data)
 
                 # No "quiet for N minutes" watchdog here: a pong is proof the
