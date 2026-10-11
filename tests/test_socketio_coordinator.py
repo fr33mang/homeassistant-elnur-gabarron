@@ -185,6 +185,21 @@ async def test_ping_sender_disconnects_when_send_fails(coordinator):
     assert coordinator._connected is False
 
 
+async def test_close_ws_for_reconnect_logs_a_close_error_instead_of_raising(coordinator, caplog):
+    # We're reconnecting either way, so a failed close must not escape -- but
+    # it used to vanish without a trace, which is exactly what you need to see
+    # when chasing a stuck socket.
+    coordinator._ws = AsyncMock()
+    coordinator._ws.closed = False
+    coordinator._ws.close.side_effect = ConnectionResetError("boom")
+
+    with caplog.at_level(logging.DEBUG):
+        await coordinator._close_ws_for_reconnect()
+
+    record = next(r for r in caplog.records if "closing WebSocket" in r.getMessage())
+    assert record.exc_info[1] is coordinator._ws.close.side_effect
+
+
 # ---------------------------------------------------------------------------
 # _is_heater_zone() -- node["type"] is the discriminator the official web
 # client uses; factory_options stays as a fallback for unknown types.
