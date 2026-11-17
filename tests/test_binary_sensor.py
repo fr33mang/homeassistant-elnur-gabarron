@@ -108,7 +108,7 @@ async def test_async_setup_entry_creates_every_binary_sensor_for_every_zone():
 
     hass = MagicMock()
     entry = MagicMock()
-    hass.data = {DOMAIN: {entry.entry_id: coordinator}}
+    hass.data = {DOMAIN: {entry.entry_id: [coordinator]}}
     added = []
 
     await async_setup_entry(hass, entry, lambda entities: added.extend(entities))

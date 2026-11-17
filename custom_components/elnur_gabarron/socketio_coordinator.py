@@ -88,17 +88,24 @@ class ElnurSocketIOCoordinator(DataUpdateCoordinator):
         hass: HomeAssistant,
         api: ElnurGabarronAPI,
         session: aiohttp.ClientSession,
+        dev_id: str | None = None,
     ) -> None:
-        """Initialize the Socket.IO coordinator."""
+        """Initialize the Socket.IO coordinator.
+
+        dev_id picks the hub this coordinator follows. The Socket.IO session is
+        bound to a single dev_id, so an account with several hubs needs one
+        coordinator per hub. Left as None, it follows the first hub the API lists.
+        """
         super().__init__(
             hass,
             _LOGGER,
-            name=f"{DOMAIN}_socketio",
+            name=f"{DOMAIN}_socketio_{dev_id}" if dev_id else f"{DOMAIN}_socketio",
             update_interval=None,  # Push-based updates, no polling
         )
 
         self.api = api
         self.session = session
+        self._target_dev_id = dev_id
         self._sid: str | None = None
         self._device_id: str | None = None
         self._device_name: str | None = None
@@ -195,12 +202,17 @@ class ElnurSocketIOCoordinator(DataUpdateCoordinator):
             if not devices:
                 raise UpdateFailed("No devices found")
 
-            # Get first device info (including group information)
-            first_device = devices[0]
-            self._device_id = first_device.get("dev_id")
-            self._device_name = first_device.get("name", "Device")
-            self._group_id = first_device.get("group_id")
-            self._group_name = first_device.get("group_name", "Home")
+            # Pick this coordinator's hub (including group information)
+            if self._target_dev_id is None:
+                device = devices[0]
+            else:
+                device = next((d for d in devices if d.get("dev_id") == self._target_dev_id), None)
+                if device is None:
+                    raise UpdateFailed(f"Hub {self._target_dev_id} is no longer on the account")
+            self._device_id = device.get("dev_id")
+            self._device_name = device.get("name", "Device")
+            self._group_id = device.get("group_id")
+            self._group_name = device.get("group_name", "Home")
 
             _LOGGER.debug("Device: %s (ID: %s)", self._device_name, self._device_id)
             _LOGGER.debug("Group: %s (ID: %s)", self._group_name, self._group_id)

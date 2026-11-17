@@ -1,5 +1,5 @@
 import logging
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from typing import Any
 
 from homeassistant.exceptions import ConfigEntryNotReady
@@ -79,6 +79,23 @@ def iter_resolvable_zones(
         raise ConfigEntryNotReady(
             f"None of the {len(zones)} zone(s) reported by the coordinator could be resolved to a device_id and zone_id"
         )
+
+
+def iter_entry_zones(
+    coordinators: Iterable[Any],
+) -> Iterator[tuple[Any, str, dict[str, Any], str, int]]:
+    """Yield (coordinator, zone_key, zone_data, device_id, zone_id) across every hub.
+
+    A config entry holds one coordinator per hub on the account, each with its
+    own Socket.IO session, so platforms walk all of them. Entities keep the
+    coordinator their zone came from: updates for a hub only arrive there.
+
+    Each coordinator's zones go through iter_resolvable_zones unchanged, so a
+    hub whose zones can't be resolved at all still raises ConfigEntryNotReady.
+    """
+    for coordinator in coordinators:
+        for zone_key, zone_data, device_id, zone_id in iter_resolvable_zones(coordinator.data):
+            yield coordinator, zone_key, zone_data, device_id, zone_id
 
 
 def build_device_info(

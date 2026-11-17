@@ -13,7 +13,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import StateType
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, build_device_info, iter_resolvable_zones
+from .const import DOMAIN, build_device_info, iter_entry_zones
 from .socketio_coordinator import ElnurSocketIOCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -245,10 +245,10 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Elnur Gabarron sensor entities."""
-    coordinator: ElnurSocketIOCoordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinators: list[ElnurSocketIOCoordinator] = hass.data[DOMAIN][entry.entry_id]
 
     entities: list[ElnurGabarronSensor] = []
-    for zone_key, zone_data, actual_device_id, zone_id in iter_resolvable_zones(coordinator.data):
+    for coordinator, zone_key, zone_data, actual_device_id, zone_id in iter_entry_zones(coordinators):
         zone_name = zone_data.get("name", f"Heater Zone {zone_id}")
 
         for description in SENSOR_DESCRIPTIONS:

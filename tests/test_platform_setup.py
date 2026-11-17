@@ -22,14 +22,18 @@ from .fixtures import DEVICE_ID, ZONE_ID, ZONE_KEY, ZONE_OFF
 PLATFORMS = [pytest.param(climate_setup, 1, id="climate"), pytest.param(number_setup, 3, id="number")]
 
 
-async def run_setup(setup, zones: dict) -> list:
-    coordinator = MagicMock()
-    coordinator.data = zones
-    coordinator.last_update_success = True
+async def run_setup(setup, zones: dict, *other_hubs: dict) -> list:
+    """Run a platform setup with one coordinator per hub's zones."""
+    coordinators = []
+    for hub_zones in (zones, *other_hubs):
+        coordinator = MagicMock()
+        coordinator.data = hub_zones
+        coordinator.last_update_success = True
+        coordinators.append(coordinator)
 
     hass = MagicMock()
     entry = MagicMock()
-    hass.data = {DOMAIN: {entry.entry_id: coordinator}}
+    hass.data = {DOMAIN: {entry.entry_id: coordinators}}
     added: list = []
 
     await setup(hass, entry, lambda entities: added.extend(entities))
@@ -42,6 +46,24 @@ async def test_creates_entities_for_each_zone(setup, per_zone):
 
     assert len(added) == 2 * per_zone
     assert len({e.unique_id for e in added}) == len(added)
+
+
+@pytest.mark.parametrize(("setup", "per_zone"), PLATFORMS)
+async def test_creates_entities_for_every_hub_on_its_own_coordinator(setup, per_zone):
+    # Each hub has its own Socket.IO session, so an entity has to listen to the
+    # coordinator its zone came from -- updates for that hub only land there.
+    other_hub = "8899aabbccddeeff00"
+    added = await run_setup(
+        setup,
+        {ZONE_KEY: ZONE_OFF},
+        {f"{other_hub}_zone{ZONE_ID}": {**ZONE_OFF, "device_id": other_hub, "name": "Test Zone B"}},
+    )
+
+    assert len(added) == 2 * per_zone
+    assert len({e.unique_id for e in added}) == len(added)
+    assert sum(other_hub in e.unique_id for e in added) == per_zone
+    assert all(e._zone_key in e.coordinator.data for e in added)
+    assert len({id(e.coordinator) for e in added}) == 2
 
 
 @pytest.mark.parametrize(("setup", "per_zone"), PLATFORMS)

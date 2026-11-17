@@ -111,8 +111,8 @@ All three accept 7–30 °C:
 ## How It Works
 
 1. Logs in over the REST API (OAuth2; tokens are refreshed automatically)
-2. Discovers the hub, its zones and your home's name, and renames the integration entry to match
-3. Connects to the Socket.IO server and switches to WebSocket right after the handshake, as the official web app does, falling back to HTTP long-polling if the server offers no upgrade
+2. Discovers every hub on the account, their zones and your home's name, and renames the integration entry to match
+3. Opens one Socket.IO connection per hub (the server binds each session to a single hub) and switches to WebSocket right after the handshake, as the official web app does, falling back to HTTP long-polling if the server offers no upgrade
 4. Requests the full device state (`dev_data`) and creates one device per zone
 5. Applies pushed updates as they arrive; the connection stays open indefinitely and reconnects only after an actual disconnect
 
@@ -120,7 +120,6 @@ Protocol details — ping direction and timing, packet framing, the upgrade sequ
 
 ## Limitations
 
-- **One hub per config entry** — only the first hub on the account is set up; any others are ignored
 - **Storage heaters only** — see [Supported Hardware](#supported-hardware)
 
 ## Troubleshooting
