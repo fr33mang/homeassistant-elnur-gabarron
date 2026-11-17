@@ -252,7 +252,7 @@ async def test_async_setup_entry_creates_every_sensor_for_every_zone():
 
     hass = MagicMock()
     entry = MagicMock()
-    hass.data = {DOMAIN: {entry.entry_id: coordinator}}
+    hass.data = {DOMAIN: {entry.entry_id: [coordinator]}}
     added = []
 
     await async_setup_entry(hass, entry, lambda entities: added.extend(entities))
@@ -273,7 +273,7 @@ async def test_device_id_comes_from_the_payload_not_the_zone_key():
 
     hass = MagicMock()
     entry = MagicMock()
-    hass.data = {DOMAIN: {entry.entry_id: coordinator}}
+    hass.data = {DOMAIN: {entry.entry_id: [coordinator]}}
     added = []
 
     await async_setup_entry(hass, entry, lambda entities: added.extend(entities))
@@ -310,7 +310,7 @@ async def test_setup_skips_a_broken_zone_and_keeps_the_healthy_ones(broken_zone)
 
     hass = MagicMock()
     entry = MagicMock()
-    hass.data = {DOMAIN: {entry.entry_id: coordinator}}
+    hass.data = {DOMAIN: {entry.entry_id: [coordinator]}}
     added = []
 
     await async_setup_entry(hass, entry, lambda entities: added.extend(entities))
@@ -333,7 +333,7 @@ async def test_setup_refuses_when_no_zone_resolves():
 
     hass = MagicMock()
     entry = MagicMock()
-    hass.data = {DOMAIN: {entry.entry_id: coordinator}}
+    hass.data = {DOMAIN: {entry.entry_id: [coordinator]}}
     added = []
 
     with pytest.raises(ConfigEntryNotReady):

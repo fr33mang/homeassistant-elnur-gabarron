@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import aiohttp
 import pytest
+from homeassistant.helpers.update_coordinator import UpdateFailed
 
 from custom_components.elnur_gabarron.socketio_coordinator import ElnurSocketIOCoordinator, parse_engineio_payload
 
@@ -69,6 +70,53 @@ def coordinator(hass) -> ElnurSocketIOCoordinator:
     coord._group_id = "group1"
     coord._group_name = "Test Home"
     return coord
+
+
+# ---------------------------------------------------------------------------
+# _fetch_initial_data() -- which hub a coordinator follows
+# ---------------------------------------------------------------------------
+
+HUBS = [
+    {"dev_id": "hub-a", "name": "Test Hub A", "group_id": "group1", "group_name": "Test Home"},
+    {"dev_id": "hub-b", "name": "Test Hub B", "group_id": "group1", "group_name": "Test Home"},
+]
+
+
+def make_hub_coordinator(hass, dev_id: str | None) -> ElnurSocketIOCoordinator:
+    api = MagicMock()
+    api.get_devices = AsyncMock(return_value=[dict(hub) for hub in HUBS])
+    coord = ElnurSocketIOCoordinator(hass, api, MagicMock(spec=aiohttp.ClientSession), dev_id=dev_id)
+    coord._connect_socketio = AsyncMock(return_value=True)
+    coord._await_dev_data = AsyncMock(return_value={})
+    return coord
+
+
+async def test_fetch_initial_data_follows_the_requested_hub(hass):
+    coord = make_hub_coordinator(hass, "hub-b")
+
+    await coord._fetch_initial_data()
+
+    assert coord._device_id == "hub-b"
+    assert coord._device_name == "Test Hub B"
+
+
+async def test_fetch_initial_data_defaults_to_the_first_hub(hass):
+    coord = make_hub_coordinator(hass, None)
+
+    await coord._fetch_initial_data()
+
+    assert coord._device_id == "hub-a"
+
+
+async def test_fetch_initial_data_fails_when_the_hub_is_gone(hass):
+    coord = make_hub_coordinator(hass, "hub-gone")
+
+    with pytest.raises(UpdateFailed):
+        await coord._fetch_initial_data()
+
+    # Never fall back to another hub: its zones would land under this one.
+    coord._connect_socketio.assert_not_awaited()
+    assert coord._device_id is None
 
 
 def test_parse_dev_data_message_ignores_non_dev_data(coordinator):

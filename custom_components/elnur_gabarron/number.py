@@ -12,7 +12,7 @@ from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, build_device_info, iter_resolvable_zones
+from .const import DOMAIN, build_device_info, iter_entry_zones
 from .socketio_coordinator import ElnurSocketIOCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -24,11 +24,11 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Elnur Gabarron number entities."""
-    coordinator: ElnurSocketIOCoordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinators: list[ElnurSocketIOCoordinator] = hass.data[DOMAIN][entry.entry_id]
 
     # Create number entities for each zone
     entities = []
-    for zone_key, zone_data, device_id, zone_id in iter_resolvable_zones(coordinator.data):
+    for coordinator, zone_key, zone_data, device_id, zone_id in iter_entry_zones(coordinators):
         zone_name = zone_data.get("name", f"Zone {zone_id}")
 
         # Add temperature setting numbers in desired order
